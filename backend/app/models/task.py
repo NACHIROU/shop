@@ -24,18 +24,32 @@ class Task(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     admin_id: str
     collaborator_id: str
-    type: str  # "sale", "delivery", "client_visit", etc.
-    title: str  # added
-    description: Optional[str] = None  # added
+    type: str  # "vente", "troc", "delivery", "client_visit", etc.
+    title: str
+    description: Optional[str] = None
     product_id: Optional[str] = None
-    quantity: Optional[int] = None  # added
-    client_name: Optional[str] = None  # added
-    client_phone: Optional[str] = None  # added
+    quantity: Optional[int] = None
+    client_name: Optional[str] = None
+    client_phone: Optional[str] = None
     status: str  # "in_progress", "in_delivery", "completed", "cancelled"
-    date: datetime
+    date: datetime = Field(default_factory=datetime.utcnow)
     note: Optional[str] = None
+    
+    # Sale-specific fields
+    selling_price: Optional[float] = None  # For "vente" type
+    client: Optional[str] = None  # Customer name for sales
+    
+    # Trade-specific fields (for "troc" type)
+    outgoing_product_id: Optional[str] = None  # Product being traded away
+    outgoing_product_price: Optional[float] = None
+    incoming_product_name: Optional[str] = None  # New product details
+    incoming_product_imei: Optional[str] = None
+    incoming_product_price: Optional[float] = None
+    incoming_product_category: Optional[str] = None
+    recovered_from: Optional[str] = None  # Person/source of incoming product
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)  # added
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = {
         "populate_by_name": True,

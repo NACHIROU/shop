@@ -1,8 +1,16 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { api, getStatusLabel, getStatusColor, getTaskTypeLabel } from '@/services/api';
-import { Task, TaskStatus, Product } from '@/types';
+import {
+  getStatusLabel,
+  getStatusColor,
+  getTaskTypeLabel,
+  formatDate,
+  tasksApi,
+  productsApi
+} from '@/services/api';
+import type { Task, TaskStatus, Product } from '@/types';
 import { Button } from '@/components/ui/button';
+import { PageLoader } from '@/components/ui/loader';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -23,271 +31,475 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Plus, 
+import {
+  Plus,
   Search,
   Package,
   Truck,
   Users,
   Clock,
-  CheckCircle2,
-  XCircle,
-  ClipboardList
+  MoreVertical,
+  Calendar,
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
 
-const typeIcons: Record<string, React.ElementType> = {
-  sale: Package,
+const typeIcons = {
+  vente: Package,
+  troc: RefreshCw,
   delivery: Truck,
   client_visit: Users,
-  exchange: Package,
+  exchange: RefreshCw,
   purchase: Package,
   other: Clock,
 };
 
-const statusButtons: { status: TaskStatus; label: string; icon: React.ElementType; color: string }[] = [
-  { status: 'in_progress', label: 'En cours', icon: Clock, color: 'bg-info hover:bg-info/90' },
-  { status: 'in_delivery', label: 'En livraison', icon: Truck, color: 'bg-warning hover:bg-warning/90' },
-  { status: 'completed', label: 'Terminée', icon: CheckCircle2, color: 'bg-success hover:bg-success/90' },
-  { status: 'cancelled', label: 'Annulée', icon: XCircle, color: 'bg-destructive hover:bg-destructive/90' },
+const statusFilters: { label: string; value: TaskStatus | 'all' }[] = [
+  { label: 'Toutes', value: 'all' },
+  { label: 'En cours', value: 'in_progress' },
+  { label: 'En livraison', value: 'in_delivery' },
+  { label: 'Terminées', value: 'completed' },
 ];
 
 export default function CollaboratorTasks() {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [taskList, setTaskList] = useState<Task[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedTaskType, setSelectedTaskType] = useState<'vente' | 'troc' | 'repair' | 'other'>('vente');
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [tasksData, productsData] = await Promise.all([
+        tasksApi.getAll(),
+        productsApi.getAll()
+      ]);
+
+      // Map backend data
+      const mappedTasks = tasksData.map((t: any) => ({
+        ...t,
+        assignedTo: t.assigned_to || t.assignedTo,
+        assignedToName: t.assigned_to_name || t.assignedToName,
+        productId: t.product_id,
+        productName: t.product_name,
+        clientName: t.client_name,
+        clientPhone: t.client_phone,
+        createdAt: t.created_at || t.createdAt,
+        updatedAt: t.updated_at || t.updatedAt,
+        sellingPrice: t.selling_price,
+        outgoingProductId: t.outgoing_product_id,
+        outgoingProductPrice: t.outgoing_product_price,
+        incomingProductName: t.incoming_product_name,
+        incomingProductImei: t.incoming_product_imei,
+        incomingProductPrice: t.incoming_product_price,
+        incomingProductCategory: t.incoming_product_category,
+        recoveredFrom: t.recovered_from,
+      }));
+
+      // Filter tasks for current collaborator
+      setTaskList(mappedTasks.filter((t: Task) => t.assignedTo === user?.id));
+      setProducts(productsData.items);
+    } catch (error) {
+      console.error(error);
+      toast.error('Erreur lors du chargement des données');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    api.tasks.getAll().then(tasks => {
-      setTaskList(tasks.filter(t => t.assignedTo === '2'));
-    });
-    api.products.getAll().then(setProducts);
-  }, []);
+    fetchData();
+  }, [user?.id]);
 
-  const filteredTasks = taskList.filter(task =>
-    task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    task.clientName?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTasks = taskList.filter(task => {
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
-  const handleAddTask = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddTask = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const productId = formData.get('product') as string;
-    const product = products.find(p => p.id === productId);
-    
-    const newTask: Task = {
-      id: String(Date.now()),
+
+    let payload: any = {
       title: formData.get('title') as string,
       description: formData.get('description') as string,
-      type: formData.get('type') as Task['type'],
-      status: 'in_progress',
-      assignedTo: '2',
-      assignedToName: user?.name || 'Collaborateur',
-      productId: productId || undefined,
-      productName: product?.name,
-      clientName: formData.get('clientName') as string,
-      clientPhone: formData.get('clientPhone') as string,
-      date: new Date().toISOString().split('T')[0],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      type: selectedTaskType,
+      assigned_to: user?.id, // Auto-assign to self
+      date: formData.get('date') as string,
     };
-    setTaskList([newTask, ...taskList]);
-    setIsAddDialogOpen(false);
-    toast.success('Tâche ajoutée avec succès');
+
+    // Vente
+    if (selectedTaskType === 'vente') {
+      payload.product_id = formData.get('product') as string;
+      payload.selling_price = Number(formData.get('sellingPrice'));
+      payload.client = formData.get('client') as string || undefined;
+    }
+
+    // Troc
+    if (selectedTaskType === 'troc') {
+      payload.outgoing_product_id = formData.get('outgoingProduct') as string;
+      payload.outgoing_product_price = Number(formData.get('outgoingPrice'));
+      payload.incoming_product_name = formData.get('incomingName') as string;
+      payload.incoming_product_imei = formData.get('incomingImei') as string;
+      payload.incoming_product_price = Number(formData.get('incomingPrice'));
+      payload.incoming_product_category = formData.get('incomingCategory') as string;
+      payload.recovered_from = formData.get('recoveredFrom') as string;
+    }
+
+    try {
+      await tasksApi.create(payload as any);
+      toast.success('Tâche créée avec succès');
+      setIsAddDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la création de la tâche");
+    }
   };
 
-  const handleUpdateStatus = (taskId: string, newStatus: TaskStatus) => {
-    setTaskList(taskList.map(t => 
-      t.id === taskId 
-        ? { ...t, status: newStatus, updatedAt: new Date().toISOString() }
-        : t
-    ));
-    toast.success(`Statut mis à jour: ${getStatusLabel(newStatus)}`);
+  const handleUpdateStatus = async (taskId: string, newStatus: TaskStatus) => {
+    try {
+      await tasksApi.updateStatus(taskId, newStatus);
+      toast.success('Statut mis à jour');
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la mise à jour du statut");
+    }
   };
 
-  const inProgressCount = taskList.filter(t => t.status === 'in_progress' || t.status === 'in_delivery').length;
-  const completedCount = taskList.filter(t => t.status === 'completed').length;
+  const statusCounts = {
+    in_progress: taskList.filter(t => t.status === 'in_progress').length,
+    in_delivery: taskList.filter(t => t.status === 'in_delivery').length,
+    completed: taskList.filter(t => t.status === 'completed').length,
+  };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-slide-up">
+      <div className="space-y-4 md:space-y-6 pb-6">
+        {/* Page Header - Mobile optimized */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4 animate-slide-up">
           <div>
-            <h1 className="text-2xl font-bold">Mes tâches</h1>
-            <p className="text-muted-foreground">
-              {inProgressCount} en cours • {completedCount} terminées
-            </p>
+            <h1 className="text-xl md:text-2xl font-bold">Mes tâches</h1>
+            <p className="text-sm md:text-base text-muted-foreground">Gérez vos ventes et trocs</p>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2 gradient-primary">
+              <Button className="gap-2 gradient-primary w-full sm:w-auto">
                 <Plus className="w-4 h-4" />
-                Nouvelle tâche
+                <span className="hidden sm:inline">Nouvelle tâche</span>
+                <span className="sm:inline md:hidden">Nouvelle</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
               <form onSubmit={handleAddTask}>
                 <DialogHeader>
-                  <DialogTitle>Ajouter une tâche</DialogTitle>
+                  <DialogTitle>Nouvelle tâche</DialogTitle>
                   <DialogDescription>
-                    Enregistrez une nouvelle vente, livraison ou visite client.
+                    Enregistrez une vente ou un troc
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label htmlFor="title">Titre</Label>
-                    <Input id="title" name="title" placeholder="Vente iPhone 15 Pro" required />
+                    <Input id="title" name="title" placeholder="Vente iPhone 15" required />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="type">Type de tâche</Label>
-                    <Select name="type" defaultValue="sale">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sale">🛒 Vente</SelectItem>
-                        <SelectItem value="delivery">🚚 Livraison</SelectItem>
-                        <SelectItem value="client_visit">👥 Visite client</SelectItem>
-                        <SelectItem value="exchange">🔄 Échange (Troc)</SelectItem>
-                        <SelectItem value="purchase">📦 Achat</SelectItem>
-                        <SelectItem value="other">📋 Autre</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="product">Produit (optionnel)</Label>
-                    <Select name="product">
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un produit" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map(p => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea id="description" name="description" placeholder="Détails..." rows={2} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="clientName">Nom du client</Label>
-                      <Input id="clientName" name="clientName" placeholder="M. Adjovi" />
+                      <Label htmlFor="type">Type</Label>
+                      <Select value={selectedTaskType} onValueChange={(v: any) => setSelectedTaskType(v)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="vente">Vente</SelectItem>
+                          <SelectItem value="troc">Troc (Échange)</SelectItem>
+                          <SelectItem value="repair">Réparation</SelectItem>
+                          <SelectItem value="other">Autre</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="clientPhone">Téléphone</Label>
-                      <Input id="clientPhone" name="clientPhone" placeholder="+229 97 00 00 00" />
+                      <Label htmlFor="date">Date</Label>
+                      <Input id="date" name="date" type="date" defaultValue={new Date().toISOString().split('T')[0]} required />
                     </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="description">Notes</Label>
-                    <Textarea id="description" name="description" placeholder="Détails supplémentaires..." />
-                  </div>
+
+                  {/* Vente Form */}
+                  {selectedTaskType === 'vente' && (
+                    <>
+                      <div className="grid gap-2">
+                        <Label htmlFor="product">Produit</Label>
+                        <Select name="product">
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <div className="p-2">
+                              <Input
+                                placeholder="Rechercher..."
+                                onChange={(e) => {
+                                  const search = e.target.value.toLowerCase();
+                                  const items = document.querySelectorAll('[data-product-item]');
+                                  items.forEach((item: any) => {
+                                    const text = item.textContent.toLowerCase();
+                                    item.style.display = text.includes(search) ? '' : 'none';
+                                  });
+                                }}
+                                className="mb-2"
+                              />
+                            </div>
+                            {products.filter(p => p.stock > 0).map(p => (
+                              <SelectItem key={p.id} value={p.id} data-product-item>
+                                {p.name} {p.imei && `(${p.imei})`} ({p.stock} en stock)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="sellingPrice">Prix de vente (FCFA)</Label>
+                        <Input id="sellingPrice" name="sellingPrice" type="number" placeholder="820000" required />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="client">Client (optionnel)</Label>
+                        <Input id="client" name="client" placeholder="M. Dupont" />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Troc Form */}
+                  {selectedTaskType === 'troc' && (
+                    <>
+                      <div className="border-t pt-4">
+                        <h3 className="font-semibold mb-3 text-sm">Produit sortant</h3>
+                        <div className="grid gap-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="outgoingProduct">Produit</Label>
+                            <Select name="outgoingProduct">
+                              <SelectTrigger>
+                                <SelectValue placeholder="Produit à échanger" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <div className="p-2">
+                                  <Input
+                                    placeholder="Rechercher..."
+                                    onChange={(e) => {
+                                      const search = e.target.value.toLowerCase();
+                                      const items = document.querySelectorAll('[data-outgoing-product]');
+                                      items.forEach((item: any) => {
+                                        const text = item.textContent.toLowerCase();
+                                        item.style.display = text.includes(search) ? '' : 'none';
+                                      });
+                                    }}
+                                    className="mb-2"
+                                  />
+                                </div>
+                                {products.filter(p => p.stock > 0).map(p => (
+                                  <SelectItem key={p.id} value={p.id} data-outgoing-product>
+                                    {p.name} {p.imei && `(${p.imei})`} ({p.stock} en stock)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="outgoingPrice">Prix (FCFA)</Label>
+                            <Input id="outgoingPrice" name="outgoingPrice" type="number" placeholder="500000" required />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="border-t pt-4">
+                        <h3 className="font-semibold mb-3 text-sm">Produit entrant</h3>
+                        <div className="grid gap-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="incomingName">Nom/Modèle</Label>
+                            <Input id="incomingName" name="incomingName" placeholder="Samsung Galaxy S24" required />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="incomingImei">IMEI</Label>
+                            <Input id="incomingImei" name="incomingImei" placeholder="987654321098765" required />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                              <Label htmlFor="incomingPrice">Prix (FCFA)</Label>
+                              <Input id="incomingPrice" name="incomingPrice" type="number" placeholder="550000" required />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor="incomingCategory">Catégorie</Label>
+                              <Select name="incomingCategory" defaultValue="Autres">
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="iPhone">iPhone</SelectItem>
+                                  <SelectItem value="Samsung">Samsung</SelectItem>
+                                  <SelectItem value="Autres">Autres</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="recoveredFrom">Récupéré de</Label>
+                            <Input id="recoveredFrom" name="recoveredFrom" placeholder="M. Martin" required />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                     Annuler
                   </Button>
-                  <Button type="submit">Ajouter</Button>
+                  <Button type="submit">Créer</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
         </div>
 
-        {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Rechercher une tâche..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+        {/* Stats - Mobile optimized */}
+        <div className="grid grid-cols-3 gap-2 md:gap-4">
+          <div className="bg-info/10 p-3 md:p-4 rounded-xl border border-info/20">
+            <p className="text-xs md:text-sm text-info">En cours</p>
+            <p className="text-xl md:text-2xl font-bold">{statusCounts.in_progress}</p>
+          </div>
+          <div className="bg-warning/10 p-3 md:p-4 rounded-xl border border-warning/20">
+            <p className="text-xs md:text-sm text-warning">Livraison</p>
+            <p className="text-xl md:text-2xl font-bold">{statusCounts.in_delivery}</p>
+          </div>
+          <div className="bg-success/10 p-3 md:p-4 rounded-xl border border-success/20">
+            <p className="text-xs md:text-sm text-success">Terminées</p>
+            <p className="text-xl md:text-2xl font-bold">{statusCounts.completed}</p>
+          </div>
         </div>
 
-        {/* Tasks List */}
-        <div className="space-y-4">
-          {filteredTasks.length === 0 ? (
-            <div className="text-center py-12 bg-card rounded-xl border border-border">
-              <ClipboardList className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="font-semibold mb-2">Aucune tâche trouvée</h3>
-              <p className="text-sm text-muted-foreground">
-                Ajoutez votre première tâche pour commencer.
-              </p>
+        {/* Filters - Mobile optimized */}
+        <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Rechercher..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {statusFilters.map((filter) => (
+              <Button
+                key={filter.value}
+                variant={statusFilter === filter.value ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter(filter.value)}
+                className="whitespace-nowrap text-xs md:text-sm"
+              >
+                {filter.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tasks List - Mobile optimized */}
+        {isLoading ? (
+          <PageLoader />
+        ) : taskList.length === 0 ? (
+          <div className="bg-card rounded-xl border border-border shadow-sm p-8 md:p-12 text-center animate-fade-in">
+            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-6 h-6 md:w-8 md:h-8 text-muted-foreground" />
             </div>
-          ) : (
-            filteredTasks.map((task) => {
-              const Icon = typeIcons[task.type] || Clock;
+            <h3 className="font-semibold mb-2 text-sm md:text-base">Aucune tâche</h3>
+            <p className="text-xs md:text-sm text-muted-foreground mb-4">Créez votre première tâche</p>
+            <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2" size="sm">
+              <Plus className="w-4 h-4" />
+              Nouvelle tâche
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3 md:space-y-4">
+            {filteredTasks.map((task) => {
+              const Icon = typeIcons[task.type as keyof typeof typeIcons] || Clock;
               return (
-                <div 
+                <div
                   key={task.id}
-                  className="bg-card p-5 rounded-xl border border-border shadow-sm hover:shadow-md transition-all animate-fade-in"
+                  className="bg-card p-3 md:p-4 rounded-xl border border-border shadow-sm hover:shadow-md transition-all animate-fade-in"
                 >
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-                      <Icon className="w-6 h-6 text-muted-foreground" />
+                  <div className="flex items-start gap-3 md:gap-4">
+                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-semibold text-lg">{task.title}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="secondary">{getTaskTypeLabel(task.type)}</Badge>
-                            <Badge className={cn("text-xs", getStatusColor(task.status))}>
-                              {getStatusLabel(task.status)}
-                            </Badge>
-                          </div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-sm md:text-base truncate">{task.title}</h3>
+                          {task.description && (
+                            <p className="text-xs md:text-sm text-muted-foreground line-clamp-1">{task.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={cn("text-xs whitespace-nowrap", getStatusColor(task.status))}>
+                            <span className="hidden sm:inline">{getStatusLabel(task.status)}</span>
+                            <span className="sm:hidden">
+                              {task.status === 'completed' ? '✓' : task.status === 'in_progress' ? '⏳' : '🚚'}
+                            </span>
+                          </Badge>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'in_progress')}>
+                                Marquer en cours
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'completed')}>
+                                Marquer terminée
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
-                      {task.description && (
-                        <p className="text-sm text-muted-foreground mt-2">{task.description}</p>
-                      )}
-                      <div className="flex flex-wrap gap-4 mt-3 text-sm text-muted-foreground">
-                        {task.productName && (
-                          <span className="flex items-center gap-1">
-                            <Package className="w-4 h-4" />
-                            {task.productName}
-                          </span>
+                      <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3 md:w-4 md:h-4" />
+                          {formatDate(task.date)}
+                        </span>
+                        <Badge variant="secondary" className="text-xs">{getTaskTypeLabel(task.type)}</Badge>
+                        {task.sellingPrice && (
+                          <span className="text-success font-medium">{task.sellingPrice.toLocaleString()} FCFA</span>
                         )}
-                        {task.clientName && (
-                          <span className="flex items-center gap-1">
-                            <Users className="w-4 h-4" />
-                            {task.clientName}
-                          </span>
+                        {task.client && (
+                          <span className="hidden sm:inline">Client: {task.client}</span>
                         )}
                       </div>
                     </div>
-                  </div>
-                  
-                  {/* Status Update Buttons */}
-                  <div className="flex flex-wrap gap-2 pt-4 border-t border-border">
-                    <span className="text-sm text-muted-foreground mr-2 self-center">Mettre à jour:</span>
-                    {statusButtons.map(({ status, label, icon: StatusIcon, color }) => (
-                      <Button
-                        key={status}
-                        size="sm"
-                        variant={task.status === status ? 'default' : 'outline'}
-                        className={cn(
-                          "gap-1.5",
-                          task.status === status && color
-                        )}
-                        onClick={() => handleUpdateStatus(task.id, status)}
-                      >
-                        <StatusIcon className="w-3.5 h-3.5" />
-                        {label}
-                      </Button>
-                    ))}
                   </div>
                 </div>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

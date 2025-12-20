@@ -7,7 +7,10 @@ interface User {
   id: string;
   name: string;
   email: string;
+  phone: string;
   role: UserRole;
+  is_active: boolean;
+  created_at: string;
   avatar?: string;
 }
 
@@ -51,7 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: response.user.id,
         name: response.user.name,
         email: response.user.email,
+        phone: response.user.phone,
         role: response.user.role,
+        is_active: response.user.is_active,
+        created_at: response.user.created_at,
       };
       setUser(userData);
       setRole(response.user.role);
@@ -70,7 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: response.user.id,
         name: response.user.name,
         email: response.user.email,
+        phone: response.user.phone,
         role: response.user.role,
+        is_active: response.user.is_active,
+        created_at: response.user.created_at,
       };
       setUser(userData);
       setRole(response.user.role);

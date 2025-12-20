@@ -14,6 +14,7 @@ import type {
   MonthlyStats,
   DailyOverview,
   PaginatedResponse,
+  InviteLink,
 } from '@/types';
 
 // Base API URL - proxied to backend
@@ -56,17 +57,39 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  createCollaborator: (data: { name: string; email: string; password: string; role: string; phone?: string }) =>
+  createCollaborator: (data: { name: string; email: string; role: string; phone?: string; password?: string }) =>
     apiFetch<{ id: string; name: string; email: string; phone: string; role: string; is_active: boolean; created_at: string }>('/auth/collaborators', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
   getCollaborators: () =>
     apiFetch<Collaborator[]>('/auth/collaborators'),
+  generateInviteLink: (collaboratorId: string) =>
+    apiFetch<InviteLink>(`/auth/collaborators/${collaboratorId}/invite-link`, {
+      method: 'POST',
+    }),
+  verifyInviteToken: (token: string) =>
+    apiFetch<{ user_id: string; email: string; name: string }>(`/auth/verify-invite/${token}`, {
+      method: 'POST',
+    }),
+  activateAccount: (token: string, newPassword: string) =>
+    apiFetch<{ access_token: string; refresh_token: string; token_type: string; user: any }>('/auth/activate', {
+      method: 'POST',
+      body: JSON.stringify({ token, new_password: newPassword }),
+    }),
   changePassword: (data: { new_password: string }) =>
     apiFetch('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ new_password: data.new_password }),
+    }),
+  updateCollaborator: (id: string, data: Partial<Collaborator>) =>
+    apiFetch<Collaborator>(`/auth/collaborators/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteCollaborator: (id: string) =>
+    apiFetch(`/auth/collaborators/${id}`, {
+      method: 'DELETE',
     }),
 };
 // ============= Suppliers API =============
@@ -83,8 +106,12 @@ export const suppliersApi = {
 
 // ============= Products API =============
 export const productsApi = {
-  getAll: (page: number = 1, limit: number = 50): Promise<PaginatedResponse<Product>> =>
-    apiFetch(`/products/?page=${page}&size=${limit}`),
+  getAll: (page: number = 1, limit: number = 50, search?: string, category?: string): Promise<PaginatedResponse<Product>> => {
+    let url = `/products/?page=${page}&size=${limit}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    if (category && category !== 'all') url += `&category=${encodeURIComponent(category)}`;
+    return apiFetch(url);
+  },
   getById: (id: string): Promise<Product> => apiFetch(`/products/${id}`),
   create: (data: Omit<Product, 'id' | 'createdAt'>): Promise<Product> =>
     apiFetch('/products/', { method: 'POST', body: JSON.stringify(data) }),
@@ -149,14 +176,22 @@ export const statsApi = {
   getWeekly: (): Promise<DailyStats[]> => apiFetch('/stats/weekly'),
 };
 
+// ============= Notifications API =============
+export const notificationsApi = {
+  getAll: (): Promise<any[]> => apiFetch('/notifications/'),
+  markAsRead: (id: string) => apiFetch(`/notifications/${id}/read`, { method: 'POST' }),
+  markAllAsRead: () => apiFetch('/notifications/read-all', { method: 'POST' }),
+};
+
 // ============= Utility Functions =============
 export function formatCurrency(amount: number): string {
+  const value = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
   return new Intl.NumberFormat('fr-BJ', {
     style: 'currency',
     currency: 'XOF',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(value);
 }
 
 export function getStatusLabel(status: TaskStatus): string {
@@ -181,14 +216,16 @@ export function getStatusColor(status: TaskStatus): string {
 
 export function getTaskTypeLabel(type: Task['type']): string {
   const labels: Record<Task['type'], string> = {
-    sale: 'Vente',
+    vente: 'Vente',
+    troc: 'Troc',
+    repair: 'Réparation',
     delivery: 'Livraison',
     client_visit: 'Visite client',
     exchange: 'Échange',
     purchase: 'Achat',
     other: 'Autre',
   };
-  return labels[type];
+  return labels[type] || type;
 }
 
 export function getExpenseCategoryLabel(category: ExpenseCategory): string {
@@ -220,4 +257,5 @@ export const api = {
   tasks: tasksApi,
   expenses: expensesApi,
   stats: statsApi,
+  notifications: notificationsApi,
 };

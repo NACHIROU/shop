@@ -3,16 +3,18 @@ from typing import Optional
 
 class ProductCreate(BaseModel):
     name: str
+    description: Optional[str] = None
+    imei: str
     purchase_price: float
-    selling_price: float
-    category: str = "other"
+    category: str = "Autres"  # "iPhone", "Samsung", "Autres"
     stock: int = 0
     supplier_id: Optional[str] = None
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
+    description: Optional[str] = None
+    imei: Optional[str] = None
     purchase_price: Optional[float] = None
-    selling_price: Optional[float] = None
     category: Optional[str] = None
     stock: Optional[int] = None
     supplier_id: Optional[str] = None
@@ -20,8 +22,9 @@ class ProductUpdate(BaseModel):
 class ProductResponse(BaseModel):
     id: str
     name: str
+    description: Optional[str] = None
+    imei: Optional[str] = None
     purchase_price: float
-    selling_price: float
     stock: int  # computed
     category: str
     supplier_id: Optional[str] = None
@@ -35,4 +38,3 @@ class PaginatedProductResponse(BaseModel):
     size: int
     pages: int
     total_value: float = 0
-    total_profit: float = 0

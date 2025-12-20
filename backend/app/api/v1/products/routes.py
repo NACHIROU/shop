@@ -19,10 +19,12 @@ async def create_product(
 async def get_products(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=100),
+    search: str = Query(None),
+    category: str = Query(None),
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    return await ProductService.get_products(admin_id, page, size)
+    return await ProductService.get_products(admin_id, page, size, search, category)
 
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(

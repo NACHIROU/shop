@@ -9,11 +9,21 @@ from bson import ObjectId
 class ProductService:
     @staticmethod
     async def create_product(admin_id: str, product_data: ProductCreate) -> Product:
+        # Validate IMEI uniqueness per admin (only if IMEI is provided)
+        if product_data.imei:
+            existing = await products_collection.find_one({
+                "admin_id": admin_id,
+                "imei": product_data.imei
+            })
+            if existing:
+                raise HTTPException(status_code=400, detail="Un produit avec cet IMEI existe déjà")
+        
         product = Product(
             admin_id=admin_id,
             name=product_data.name,
+            description=product_data.description,
+            imei=product_data.imei,
             purchase_price=product_data.purchase_price,
-            selling_price=product_data.selling_price,
             category=product_data.category,
             stock=product_data.stock,
             supplier_id=product_data.supplier_id
@@ -23,25 +33,40 @@ class ProductService:
         return product
 
     @staticmethod
-    async def get_products(admin_id: Optional[str] = None, page: int = 1, size: int = 50) -> PaginatedProductResponse:
+    async def get_products(
+        admin_id: Optional[str] = None, 
+        page: int = 1, 
+        size: int = 50,
+        search: Optional[str] = None,
+        category: Optional[str] = None
+    ) -> PaginatedProductResponse:
         import math
         skip = (page - 1) * size
         query = {"admin_id": admin_id} if admin_id else {}
         
+        # Add search filter
+        if search:
+            query["$or"] = [
+                {"name": {"$regex": search, "$options": "i"}},
+                {"imei": {"$regex": search, "$options": "i"}}
+            ]
+        
+        # Add category filter
+        if category and category != "all":
+            query["category"] = category
+        
         total = await products_collection.count_documents(query)
         
-        # Calculate stats for all products (matching query)
+        # Calculate total value (purchase price * stock)
         pipeline = [
             {"$match": query},
             {"$group": {
                 "_id": None, 
-                "total_value": {"$sum": {"$multiply": ["$selling_price", "$stock"]}},
-                "total_profit": {"$sum": {"$multiply": [{"$subtract": ["$selling_price", "$purchase_price"]}, "$stock"]}}
+                "total_value": {"$sum": {"$multiply": ["$purchase_price", "$stock"]}}
             }}
         ]
         stats = await products_collection.aggregate(pipeline).to_list(length=1)
         total_value = stats[0]["total_value"] if stats else 0
-        total_profit = stats[0]["total_profit"] if stats else 0
 
         cursor = products_collection.find(query).skip(skip).limit(size)
         
@@ -61,8 +86,9 @@ class ProductService:
             products.append(ProductResponse(
                 id=str(product.id),
                 name=product.name,
+                description=product.description,
+                imei=product.imei,
                 purchase_price=product.purchase_price,
-                selling_price=product.selling_price,
                 stock=stock,
                 category=product.category,
                 supplier_id=product.supplier_id,
@@ -76,8 +102,7 @@ class ProductService:
             page=page,
             size=size,
             pages=math.ceil(total / size),
-            total_value=total_value,
-            total_profit=total_profit
+            total_value=total_value
         )
 
     @staticmethod
@@ -100,8 +125,9 @@ class ProductService:
         return ProductResponse(
             id=str(product.id),
             name=product.name,
+            description=product.description,
+            imei=product.imei,
             purchase_price=product.purchase_price,
-            selling_price=product.selling_price,
             stock=stock,
             category=product.category,
             supplier_id=product.supplier_id,
@@ -114,15 +140,27 @@ class ProductService:
         try:
             oid = ObjectId(product_id)
         except:
-            raise HTTPException(status_code=400, detail="Invalid product ID")
+            raise HTTPException(status_code=400, detail=f"Invalid product ID: {product_id}")
 
         update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
+        if "imei" in update_dict and update_dict["imei"]:
+            existing = await products_collection.find_one({
+                "admin_id": admin_id,
+                "imei": update_dict["imei"],
+                "_id": {"$ne": oid}
+            })
+            if existing:
+                raise HTTPException(status_code=400, detail=f"Un produit avec cet IMEI ({update_dict['imei']}) existe déjà")
+
         if update_dict:
             update_dict["updated_at"] = datetime.utcnow()
-            await products_collection.update_one(
+            result = await products_collection.update_one(
                 {"_id": oid, "admin_id": admin_id},
                 {"$set": update_dict}
             )
+            if result.matched_count == 0:
+                raise HTTPException(status_code=404, detail=f"Product {product_id} not found or not owned by admin {admin_id}")
+        
         return await ProductService.get_product_by_id(product_id, admin_id)
 
     @staticmethod

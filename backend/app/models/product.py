@@ -24,10 +24,10 @@ class Product(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     admin_id: str
     name: str
+    description: Optional[str] = None  # Product characteristics/details
+    imei: str  # Mandatory for all products
     purchase_price: float
-    selling_price: float
-    profit: Optional[float] = None  # computed
-    category: str = "other"  # added
+    category: str = "Autres"  # "iPhone", "Samsung", "Autres"
     stock: int = 0
     supplier_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

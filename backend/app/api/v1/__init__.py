@@ -5,6 +5,7 @@ from app.api.v1.suppliers.routes import router as suppliers_router
 from app.api.v1.tasks.routes import router as tasks_router
 from app.api.v1.expenses.routes import router as expenses_router
 from app.api.v1.analytics.routes import router as analytics_router
+from app.api.v1.notifications.routes import router as notifications_router
 
 api_router = APIRouter()
 
@@ -14,3 +15,4 @@ api_router.include_router(suppliers_router, prefix="/suppliers", tags=["supplier
 api_router.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
 api_router.include_router(expenses_router, prefix="/expenses", tags=["expenses"])
 api_router.include_router(analytics_router, prefix="/stats", tags=["analytics"])
+api_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])

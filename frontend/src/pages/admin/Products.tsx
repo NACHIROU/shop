@@ -5,6 +5,7 @@ import type { Product, Supplier } from '@/types';
 import { Button } from '@/components/ui/button';
 import { PageLoader } from '@/components/ui/loader';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -31,26 +32,33 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, Search, Edit2, Trash2, TrendingUp, Truck } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, TrendingUp, Truck, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { productsApi, suppliersApi } from '@/services/api';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export default function Products() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [productList, setProductList] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGrouped, setIsGrouped] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [stats, setStats] = useState({ totalValue: 0, totalProfit: 0 });
+  const [stats, setStats] = useState({ totalValue: 0 });
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
       const [productsData, suppliersData] = await Promise.all([
-        productsApi.getAll(currentPage),
+        productsApi.getAll(currentPage, 50, searchQuery, categoryFilter),
         suppliersApi.getAll(),
       ]);
 
@@ -58,20 +66,20 @@ export default function Products() {
       const mappedProducts = productsData.items.map((p: any) => ({
         id: p.id,
         name: p.name,
-        purchasePrice: p.purchase_price, // Mapping here
-        sellingPrice: p.selling_price,   // Mapping here
+        imei: p.imei,
+        purchasePrice: p.purchase_price,
         stock: p.stock,
         category: p.category,
-        supplierId: p.supplier_id,       // Mapping here
-        supplierName: p.supplier_name,   // Mapping here
+        supplierId: p.supplier_id,
+        supplierName: p.supplier_name,
+        description: p.description,
         createdAt: p.created_at
       }));
 
       setProductList(mappedProducts);
       setTotalPages(productsData.pages);
       setStats({
-        totalValue: productsData.total_value,
-        totalProfit: productsData.total_profit
+        totalValue: productsData.total_value
       });
       setSuppliers(suppliersData);
     } catch (error) {
@@ -84,12 +92,9 @@ export default function Products() {
 
   useEffect(() => {
     fetchProducts();
-  }, [currentPage]);
+  }, [currentPage, searchQuery, categoryFilter]);
 
-  const filteredProducts = productList.filter(product =>
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Removed client-side filtering since we're using server-side search
 
   const handleAddProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -98,11 +103,12 @@ export default function Products() {
     // Prepare payload in snake_case for backend
     const payload = {
       name: formData.get('name') as string,
+      imei: formData.get('imei') as string,
       purchase_price: Number(formData.get('purchasePrice')),
-      selling_price: Number(formData.get('sellingPrice')),
       category: formData.get('category') as string,
       stock: Number(formData.get('stock')),
       supplier_id: (formData.get('supplier') as string) || undefined,
+      description: formData.get('description') as string,
     };
 
     try {
@@ -126,11 +132,12 @@ export default function Products() {
 
     const payload = {
       name: formData.get('name') as string,
+      imei: formData.get('imei') as string,
       purchase_price: Number(formData.get('purchasePrice')),
-      selling_price: Number(formData.get('sellingPrice')),
       category: formData.get('category') as string,
       stock: Number(formData.get('stock')),
       supplier_id: (formData.get('supplier') as string) || undefined,
+      description: formData.get('description') as string,
     };
 
     try {
@@ -165,10 +172,33 @@ export default function Products() {
           <Label htmlFor="name">Nom du produit</Label>
           <Input id="name" name="name" defaultValue={product?.name} placeholder="iPhone 15 Pro 256GB" required />
         </div>
+        <div className="grid gap-2">
+          <Label htmlFor="description">Description / Caractéristiques (optionnel)</Label>
+          <Textarea
+            id="description"
+            name="description"
+            defaultValue={product?.description}
+            placeholder="256GB, Bleu Titane, Excellent état..."
+            rows={3}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="imei">IMEI</Label>
+          <Input id="imei" name="imei" defaultValue={product?.imei} placeholder="123456789012345" required />
+        </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-2">
             <Label htmlFor="category">Catégorie</Label>
-            <Input id="category" name="category" defaultValue={product?.category} placeholder="iPhone 15" required />
+            <Select name="category" defaultValue={product?.category || "Autres"}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="iPhone">iPhone</SelectItem>
+                <SelectItem value="Samsung">Samsung</SelectItem>
+                <SelectItem value="Autres">Autres</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="stock">Stock initial</Label>
@@ -189,15 +219,9 @@ export default function Products() {
             </SelectContent>
           </Select>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="purchasePrice">Prix d'achat (FCFA)</Label>
-            <Input id="purchasePrice" name="purchasePrice" type="number" defaultValue={product?.purchasePrice} placeholder="650000" required />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="sellingPrice">Prix de vente (FCFA)</Label>
-            <Input id="sellingPrice" name="sellingPrice" type="number" defaultValue={product?.sellingPrice} placeholder="820000" required />
-          </div>
+        <div className="grid gap-2">
+          <Label htmlFor="purchasePrice">Prix d'achat (FCFA)</Label>
+          <Input id="purchasePrice" name="purchasePrice" type="number" defaultValue={product?.purchasePrice} placeholder="650000" required />
         </div>
       </div>
       <DialogFooter>
@@ -238,31 +262,64 @@ export default function Products() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-card p-4 rounded-xl border border-border">
             <p className="text-sm text-muted-foreground">Total articles</p>
-            <p className="text-2xl font-bold">{productList.length}</p>
+            <p className="text-2xl font-bold">{productList.reduce((acc, p) => acc + p.stock, 0)}</p>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border">
             <p className="text-sm text-muted-foreground">Valeur du stock</p>
             <p className="text-2xl font-bold text-primary">{formatCurrency(stats.totalValue)}</p>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border">
-            <p className="text-sm text-muted-foreground">Profit potentiel</p>
-            <p className="text-2xl font-bold text-success">{formatCurrency(stats.totalProfit)}</p>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+              <p className="text-sm text-muted-foreground">iPhone en stock</p>
+            </div>
+            <p className="text-2xl font-bold">{productList.filter(p => p.category === 'iPhone').reduce((acc, p) => acc + p.stock, 0)}</p>
+          </div>
+          <div className="bg-card p-4 rounded-xl border border-border">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+              <p className="text-sm text-muted-foreground">Samsung en stock</p>
+            </div>
+            <p className="text-2xl font-bold">{productList.filter(p => p.category === 'Samsung').reduce((acc, p) => acc + p.stock, 0)}</p>
           </div>
         </div>
 
-        {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Rechercher un produit..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
+        {/* Search and Filters */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Rechercher par nom ou IMEI..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Catégorie" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes catégories</SelectItem>
+                <SelectItem value="iPhone">iPhone</SelectItem>
+                <SelectItem value="Samsung">Samsung</SelectItem>
+                <SelectItem value="Autres">Autres</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant={isGrouped ? "secondary" : "outline"}
+              onClick={() => setIsGrouped(!isGrouped)}
+              className="gap-2"
+            >
+              <TrendingUp className="w-4 h-4" />
+              {isGrouped ? "Vue détaillée" : "Vue groupée"}
+            </Button>
+          </div>
         </div>
 
         {/* Products Table */}
@@ -286,46 +343,57 @@ export default function Products() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Produit</TableHead>
+                  {!isGrouped && <TableHead>IMEI</TableHead>}
                   <TableHead>Catégorie</TableHead>
-                  <TableHead>Fournisseur</TableHead>
+                  {!isGrouped && <TableHead>Fournisseur</TableHead>}
                   <TableHead className="text-right">Prix d'achat</TableHead>
-                  <TableHead className="text-right">Prix de vente</TableHead>
-                  <TableHead className="text-right">Profit</TableHead>
                   <TableHead className="text-center">Stock</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.map((product) => {
-                  const profit = product.sellingPrice - product.purchasePrice;
-                  const margin = product.purchasePrice > 0
-                    ? ((profit / product.purchasePrice) * 100).toFixed(0)
-                    : '100';
-                  return (
+                {(() => {
+                  let displayProducts = productList;
+                  if (isGrouped) {
+                    const groups = productList.reduce((acc: any, p) => {
+                      const key = `${p.name}-${p.category}`;
+                      if (!acc[key]) {
+                        acc[key] = { ...p, stock: 0, count: 0 };
+                      }
+                      acc[key].stock += p.stock;
+                      acc[key].count += 1;
+                      return acc;
+                    }, {});
+                    displayProducts = Object.values(groups);
+                  }
+
+                  return displayProducts.map((product: any) => (
                     <TableRow key={product.id}>
-                      <TableCell className="font-medium">{product.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {product.name}
+                        {isGrouped && product.count > 1 && (
+                          <span className="text-xs text-muted-foreground ml-2">
+                            ({product.count} variations)
+                          </span>
+                        )}
+                      </TableCell>
+                      {!isGrouped && <TableCell className="font-mono text-sm">{product.imei}</TableCell>}
                       <TableCell>
                         <Badge variant="secondary">{product.category}</Badge>
                       </TableCell>
-                      <TableCell>
-                        {product.supplierName ? (
-                          <div className="flex items-center gap-1 text-sm">
-                            <Truck className="w-3 h-3 text-muted-foreground" />
-                            {product.supplierName}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
+                      {!isGrouped && (
+                        <TableCell>
+                          {product.supplierName ? (
+                            <div className="flex items-center gap-1 text-sm">
+                              <Truck className="w-3 h-3 text-muted-foreground" />
+                              {product.supplierName}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="text-right">{formatCurrency(product.purchasePrice)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(product.sellingPrice)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1 text-success">
-                          <TrendingUp className="w-3 h-3" />
-                          <span>{formatCurrency(profit)}</span>
-                          <span className="text-xs text-muted-foreground">({margin}%)</span>
-                        </div>
-                      </TableCell>
                       <TableCell className="text-center">
                         <Badge variant={product.stock <= 5 ? 'destructive' : 'default'}>
                           {product.stock}
@@ -333,21 +401,42 @@ export default function Products() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => setEditingProduct(product)}>
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteProduct(product.id)}
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </Button>
+                          {product.description && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                  <Eye className="w-4 h-4 text-blue-500" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80">
+                                <div className="space-y-2">
+                                  <h4 className="font-medium leading-none">Description</h4>
+                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                    {product.description}
+                                  </p>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
+                          {!isGrouped && (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => setEditingProduct(product)}>
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDeleteProduct(product.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
+                  ));
+                })()}
               </TableBody>
             </Table>
           </div>

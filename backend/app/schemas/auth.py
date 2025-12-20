@@ -19,8 +19,15 @@ class CollaboratorCreate(BaseModel):
     name: str
     email: EmailStr
     phone: Optional[str] = None
-    password: Optional[str] = None
+    password: Optional[str] = None  # Optional for invite flow
     role: Optional[str] = "collaborator"
+
+class CollaboratorUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class UserResponse(BaseModel):
     id: str
@@ -46,3 +53,16 @@ class CollaboratorResponse(BaseModel):
     tasks_completed: int
     tasks_in_progress: int
     joined_at: str
+    is_active: bool
+
+class InviteLinkResponse(BaseModel):
+    invite_token: str
+    invite_url: str
+    collaborator_id: str
+
+class PasswordChangeRequest(BaseModel):
+    new_password: str
+
+class ActivateAccountRequest(BaseModel):
+    token: str
+    new_password: str

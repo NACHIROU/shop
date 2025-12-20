@@ -1,8 +1,8 @@
-import { 
-  LayoutDashboard, 
-  Package, 
-  Users, 
-  ClipboardList, 
+import {
+  LayoutDashboard,
+  Package,
+  Users,
+  ClipboardList,
   LogOut,
   Smartphone,
   ChevronLeft,
@@ -26,18 +26,18 @@ const adminNavItems = [
 ];
 
 const collaboratorNavItems = [
-  { title: 'Mon tableau de bord', url: '/collaborator', icon: LayoutDashboard },
-  { title: 'Mes tâches', url: '/collaborator/tasks', icon: ClipboardList },
+  { title: 'Mon tableau de bord', url: '/', icon: LayoutDashboard },
+  { title: 'Mes tâches', url: '/tasks', icon: ClipboardList },
 ];
 
 export function AppSidebar() {
   const { role, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
-  
+
   const navItems = role === 'admin' ? adminNavItems : collaboratorNavItems;
 
   return (
-    <aside 
+    <aside
       className={cn(
         "h-screen bg-sidebar text-sidebar-foreground flex flex-col transition-all duration-300 sticky top-0",
         collapsed ? "w-16" : "w-64"
@@ -64,7 +64,7 @@ export function AppSidebar() {
           <NavLink
             key={item.url}
             to={item.url}
-            end={item.url === '/' || item.url === '/collaborator'}
+            end={item.url === '/'}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
               "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",

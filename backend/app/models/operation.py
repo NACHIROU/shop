@@ -29,6 +29,7 @@ class Operation(BaseModel):
     supplier_id: Optional[str] = None  # for purchase
     quantity: Optional[int] = None
     amount: float
+    profit: Optional[float] = None  # Calculated profit for the operation
     operation_date: datetime
     note: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

@@ -53,7 +53,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const typeIcons = {
-  sale: Package,
+  vente: Package,
+  troc: RefreshCw,
   delivery: Truck,
   client_visit: Users,
   exchange: RefreshCw,
@@ -77,6 +78,7 @@ export default function Tasks() {
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedTaskType, setSelectedTaskType] = useState<'vente' | 'troc' | 'other'>('vente');
 
   const fetchData = async () => {
     try {
@@ -98,6 +100,14 @@ export default function Tasks() {
         clientPhone: t.client_phone,
         createdAt: t.created_at || t.createdAt,
         updatedAt: t.updated_at || t.updatedAt,
+        sellingPrice: t.selling_price,
+        outgoingProductId: t.outgoing_product_id,
+        outgoingProductPrice: t.outgoing_product_price,
+        incomingProductName: t.incoming_product_name,
+        incomingProductImei: t.incoming_product_imei,
+        incomingProductPrice: t.incoming_product_price,
+        incomingProductCategory: t.incoming_product_category,
+        recoveredFrom: t.recovered_from,
       }));
 
       setTaskList(mappedTasks);
@@ -126,21 +136,31 @@ export default function Tasks() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
-    // Prepare payload for backend (snake_case generally preferred/expected if Pydantic uses it, 
-    // but verifying api.ts service might just pass through. 
-    // If backend uses Pydantic BaseModel, it accepts snake_case by default or aliases.
-    // Let's use what we used elsewhere or default to snake_case for safety).
-    const payload = {
+    let payload: any = {
       title: formData.get('title') as string,
       description: formData.get('description') as string,
-      type: formData.get('type') as Task['type'],
-      status: 'in_progress',
+      type: selectedTaskType,
       assigned_to: formData.get('assignedTo') as string,
-      product_id: (formData.get('product') as string) || undefined,
-      client_name: (formData.get('clientName') as string) || undefined,
-      client_phone: (formData.get('clientPhone') as string) || undefined,
       date: formData.get('date') as string,
     };
+
+    // Vente
+    if (selectedTaskType === 'vente') {
+      payload.product_id = formData.get('product') as string;
+      payload.selling_price = Number(formData.get('sellingPrice'));
+      payload.client = formData.get('client') as string || undefined;
+    }
+
+    // Troc
+    if (selectedTaskType === 'troc') {
+      payload.outgoing_product_id = formData.get('outgoingProduct') as string;
+      payload.outgoing_product_price = Number(formData.get('outgoingPrice'));
+      payload.incoming_product_name = formData.get('incomingName') as string;
+      payload.incoming_product_imei = formData.get('incomingImei') as string;
+      payload.incoming_product_price = Number(formData.get('incomingPrice'));
+      payload.incoming_product_category = formData.get('incomingCategory') as string;
+      payload.recovered_from = formData.get('recoveredFrom') as string;
+    }
 
     try {
       await tasksApi.create(payload as any);
@@ -199,7 +219,7 @@ export default function Tasks() {
                 Nouvelle tâche
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
               <form onSubmit={handleAddTask}>
                 <DialogHeader>
                   <DialogTitle>Nouvelle tâche</DialogTitle>
@@ -219,16 +239,14 @@ export default function Tasks() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
                       <Label htmlFor="type">Type</Label>
-                      <Select name="type" defaultValue="sale">
+                      <Select value={selectedTaskType} onValueChange={(v: any) => setSelectedTaskType(v)}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="sale">Vente</SelectItem>
-                          <SelectItem value="delivery">Livraison</SelectItem>
-                          <SelectItem value="client_visit">Visite client</SelectItem>
-                          <SelectItem value="exchange">Échange (Troc)</SelectItem>
-                          <SelectItem value="purchase">Achat</SelectItem>
+                          <SelectItem value="vente">Vente</SelectItem>
+                          <SelectItem value="troc">Troc (Échange)</SelectItem>
+                          <SelectItem value="repair">Réparation</SelectItem>
                           <SelectItem value="other">Autre</SelectItem>
                         </SelectContent>
                       </Select>
@@ -255,33 +273,129 @@ export default function Tasks() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="product">Produit (optionnel)</Label>
-                    <Select name="product">
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner un produit" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.length === 0 ? (
-                          <SelectItem value="none" disabled>Aucun produit disponible</SelectItem>
-                        ) : (
-                          products.map(p => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="clientName">Nom du client</Label>
-                      <Input id="clientName" name="clientName" placeholder="M. Dupont" />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="clientPhone">Téléphone client</Label>
-                      <Input id="clientPhone" name="clientPhone" placeholder="+229 97 00 00 00" />
-                    </div>
-                  </div>
+
+                  {/* Vente Form */}
+                  {selectedTaskType === 'vente' && (
+                    <>
+                      <div className="grid gap-2">
+                        <Label htmlFor="product">Produit</Label>
+                        <Select name="product">
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner un produit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <div className="p-2">
+                              <Input
+                                placeholder="Rechercher par nom ou IMEI..."
+                                onChange={(e) => {
+                                  const search = e.target.value.toLowerCase();
+                                  const items = document.querySelectorAll('[data-product-item]');
+                                  items.forEach((item: any) => {
+                                    const text = item.textContent.toLowerCase();
+                                    item.style.display = text.includes(search) ? '' : 'none';
+                                  });
+                                }}
+                                className="mb-2"
+                              />
+                            </div>
+                            {products.filter(p => p.stock > 0).map(p => (
+                              <SelectItem key={p.id} value={p.id} data-product-item>
+                                {p.name} {p.imei && `(${p.imei})`} ({p.stock} en stock)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="sellingPrice">Prix de vente (FCFA)</Label>
+                        <Input id="sellingPrice" name="sellingPrice" type="number" placeholder="820000" required />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="client">Client (optionnel)</Label>
+                        <Input id="client" name="client" placeholder="M. Dupont" />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Troc Form */}
+                  {selectedTaskType === 'troc' && (
+                    <>
+                      <div className="border-t pt-4">
+                        <h3 className="font-semibold mb-3">Produit sortant</h3>
+                        <div className="grid gap-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="outgoingProduct">Produit</Label>
+                            <Select name="outgoingProduct">
+                              <SelectTrigger>
+                                <SelectValue placeholder="Produit à échanger" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <div className="p-2">
+                                  <Input
+                                    placeholder="Rechercher par nom ou IMEI..."
+                                    onChange={(e) => {
+                                      const search = e.target.value.toLowerCase();
+                                      const items = document.querySelectorAll('[data-outgoing-product]');
+                                      items.forEach((item: any) => {
+                                        const text = item.textContent.toLowerCase();
+                                        item.style.display = text.includes(search) ? '' : 'none';
+                                      });
+                                    }}
+                                    className="mb-2"
+                                  />
+                                </div>
+                                {products.filter(p => p.stock > 0).map(p => (
+                                  <SelectItem key={p.id} value={p.id} data-outgoing-product>
+                                    {p.name} {p.imei && `(${p.imei})`} ({p.stock} en stock)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="outgoingPrice">Prix du produit sortant (FCFA)</Label>
+                            <Input id="outgoingPrice" name="outgoingPrice" type="number" placeholder="500000" required />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="border-t pt-4">
+                        <h3 className="font-semibold mb-3">Produit entrant (nouveau)</h3>
+                        <div className="grid gap-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="incomingName">Nom/Modèle</Label>
+                            <Input id="incomingName" name="incomingName" placeholder="Samsung Galaxy S24" required />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="incomingImei">IMEI</Label>
+                            <Input id="incomingImei" name="incomingImei" placeholder="987654321098765" required />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                              <Label htmlFor="incomingPrice">Prix estimé (FCFA)</Label>
+                              <Input id="incomingPrice" name="incomingPrice" type="number" placeholder="550000" required />
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor="incomingCategory">Catégorie</Label>
+                              <Select name="incomingCategory" defaultValue="Autres">
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="iPhone">iPhone</SelectItem>
+                                  <SelectItem value="Samsung">Samsung</SelectItem>
+                                  <SelectItem value="Autres">Autres</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="recoveredFrom">Récupéré de</Label>
+                            <Input id="recoveredFrom" name="recoveredFrom" placeholder="M. Martin" required />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -359,7 +473,7 @@ export default function Tasks() {
         ) : (
           <div className="space-y-4">
             {filteredTasks.map((task) => {
-              const Icon = typeIcons[task.type];
+              const Icon = typeIcons[task.type as keyof typeof typeIcons] || Clock;
               return (
                 <div
                   key={task.id}
@@ -389,17 +503,8 @@ export default function Tasks() {
                               <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'in_progress')}>
                                 Marquer en cours
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'in_delivery')}>
-                                Marquer en livraison
-                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'completed')}>
                                 Marquer terminée
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => handleUpdateStatus(task.id, 'cancelled')}
-                              >
-                                Annuler
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive"
@@ -423,14 +528,11 @@ export default function Tasks() {
                           </span>
                         )}
                         <Badge variant="secondary">{getTaskTypeLabel(task.type)}</Badge>
-                        {task.productName && (
-                          <span className="flex items-center gap-1">
-                            <Package className="w-4 h-4" />
-                            {task.productName}
-                          </span>
+                        {task.sellingPrice && (
+                          <span className="text-success font-medium">{task.sellingPrice} FCFA</span>
                         )}
-                        {task.clientName && (
-                          <span>Client: {task.clientName}</span>
+                        {task.client && (
+                          <span>Client: {task.client}</span>
                         )}
                       </div>
                     </div>

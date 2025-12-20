@@ -12,18 +12,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, Search, Mail, Phone, MoreVertical, User, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, Mail, Phone, MoreVertical, User, CheckCircle2, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { authApi, collaboratorsApi } from '@/services/api';
-import type { Collaborator, UserRole } from '@/types';
+import { authApi } from '@/services/api';
+import type { Collaborator } from '@/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,18 +25,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PageLoader } from '@/components/ui/loader';
 
-const roles: { value: UserRole; label: string }[] = [
-  { value: 'admin', label: 'Administrateur' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'editor', label: 'Éditeur' },
-  { value: 'viewer', label: 'Observateur' },
-];
-
 export default function Collaborators() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
   const [loading, setLoading] = useState(true);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [editingCollaborator, setEditingCollaborator] = useState<Collaborator | null>(null);
 
   const fetchCollaborators = async () => {
     try {
@@ -51,10 +41,11 @@ export default function Collaborators() {
       const data = await authApi.getCollaborators();
       const mappedData = data.map((c: any) => ({
         ...c,
-        role: c.role || 'viewer',
-        joinedAt: c.created_at || c.joinedAt,
-        tasksCompleted: c.tasksCompleted || 0,
-        tasksInProgress: c.tasksInProgress || 0
+        role: c.role || 'collaborator',
+        joinedAt: c.joined_at || c.joinedAt,
+        tasksCompleted: c.tasks_completed || c.tasksCompleted || 0,
+        tasksInProgress: c.tasks_in_progress || c.tasksInProgress || 0,
+        isActive: c.is_active !== undefined ? c.is_active : true
       }));
       setCollaborators(mappedData);
     } catch (error) {
@@ -79,16 +70,26 @@ export default function Collaborators() {
     const formData = new FormData(e.currentTarget);
 
     try {
-      await authApi.createCollaborator({
+      const response = await authApi.createCollaborator({
         name: formData.get('name') as string,
         email: formData.get('email') as string,
         phone: formData.get('phone') as string,
-        password: formData.get('password') as string,
-        role: formData.get('role') as UserRole,
+        role: 'collaborator',
       });
 
-      toast.success('Collaborateur ajouté avec succès');
+      toast.success('Collaborateur créé avec succès');
       setIsAddDialogOpen(false);
+
+      // Toujours générer le lien d'invitation
+      try {
+        const inviteData = await authApi.generateInviteLink(response.id);
+        setInviteLink(inviteData.invite_url);
+        setShowInviteDialog(true);
+      } catch (error) {
+        console.error('Erreur génération lien:', error);
+        toast.error('Collaborateur créé mais erreur lors de la génération du lien');
+      }
+
       fetchCollaborators();
     } catch (error: any) {
       console.error(error);
@@ -99,15 +100,46 @@ export default function Collaborators() {
     }
   };
 
-  const handleRemoveCollaborator = async (id: string) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce collaborateur ?")) return;
+  const handleEditCollaborator = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingCollaborator) return;
+    const formData = new FormData(e.currentTarget);
+
     try {
-      await collaboratorsApi.delete(id);
-      toast.success('Collaborateur supprimé');
+      await authApi.updateCollaborator(editingCollaborator.id, {
+        name: formData.get('name') as string,
+        email: formData.get('email') as string,
+        phone: formData.get('phone') as string,
+      });
+
+      toast.success('Collaborateur modifié avec succès');
+      setEditingCollaborator(null);
+      fetchCollaborators();
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Erreur lors de la modification du collaborateur");
+    }
+  };
+
+  const handleDeleteCollaborator = async (id: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce collaborateur ?')) return;
+
+    try {
+      await authApi.deleteCollaborator(id);
+      toast.success('Collaborateur supprimé avec succès');
       fetchCollaborators();
     } catch (error) {
       console.error(error);
-      toast.error("Erreur lors de la suppression");
+      toast.error('Erreur lors de la suppression');
+    }
+  };
+
+  const copyInviteLink = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      toast.success('Lien copié !');
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -147,23 +179,9 @@ export default function Collaborators() {
                     <Label htmlFor="phone">Téléphone</Label>
                     <Input id="phone" name="phone" type="tel" placeholder="+229 97 00 00 00" />
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="password">Mot de passe provisoire</Label>
-                    <Input id="password" name="password" type="password" required />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="role">Rôle</Label>
-                    <Select name="role" defaultValue="editor">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles.map(role => (
-                          <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <p className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+                    ℹ️ Un lien d'invitation sera généré pour permettre au collaborateur de créer son mot de passe
+                  </p>
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -175,6 +193,36 @@ export default function Collaborators() {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Invite Link Dialog */}
+        <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Lien d'invitation généré</DialogTitle>
+              <DialogDescription>
+                Partagez ce lien avec le collaborateur pour qu'il active son compte
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <code className="flex-1 text-sm break-all">{inviteLink}</code>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={copyInviteLink}
+                >
+                  {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                ⏰ Ce lien est valide pendant 7 jours
+              </p>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setShowInviteDialog(false)}>Fermer</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -230,7 +278,12 @@ export default function Collaborators() {
                     </div>
                     <div>
                       <h3 className="font-semibold">{collab.name}</h3>
-                      <Badge variant="secondary">{roles.find(r => r.value === collab.role)?.label || collab.role}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{collab.role}</Badge>
+                        {!collab.isActive && (
+                          <Badge variant="destructive">Inactif</Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <DropdownMenu>
@@ -238,11 +291,11 @@ export default function Collaborators() {
                       <Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>Modifier</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setEditingCollaborator(collab)}>Modifier</DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive"
-                        onClick={() => handleRemoveCollaborator(collab.id)}
                         disabled={collab.role === 'admin'}
+                        onClick={() => handleDeleteCollaborator(collab.id)}
                       >
                         Supprimer
                       </DropdownMenuItem>
@@ -269,6 +322,56 @@ export default function Collaborators() {
             ))}
           </div>
         )}
+
+        {/* Edit Dialog */}
+        <Dialog open={!!editingCollaborator} onOpenChange={(open) => !open && setEditingCollaborator(null)}>
+          <DialogContent className="sm:max-w-[425px]">
+            <form onSubmit={handleEditCollaborator}>
+              <DialogHeader>
+                <DialogTitle>Modifier le collaborateur</DialogTitle>
+                <DialogDescription>
+                  Modifiez les informations du collaborateur.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-name">Nom complet</Label>
+                  <Input
+                    id="edit-name"
+                    name="name"
+                    defaultValue={editingCollaborator?.name}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-email">Email</Label>
+                  <Input
+                    id="edit-email"
+                    name="email"
+                    type="email"
+                    defaultValue={editingCollaborator?.email}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-phone">Téléphone</Label>
+                  <Input
+                    id="edit-phone"
+                    name="phone"
+                    type="tel"
+                    defaultValue={editingCollaborator?.phone}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditingCollaborator(null)}>
+                  Annuler
+                </Button>
+                <Button type="submit">Enregistrer</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

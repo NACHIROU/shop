@@ -20,8 +20,9 @@ export interface SupplierInput {
 export interface Product {
   id: string;
   name: string;
+  description?: string;
+  imei?: string;
   purchasePrice: number;
-  sellingPrice: number;
   stock: number;
   category: string;
   supplierId?: string;
@@ -38,13 +39,14 @@ export interface Collaborator {
   tasksCompleted: number;
   tasksInProgress: number;
   joinedAt: string;
+  isActive: boolean;
   avatar?: string;
 }
 
-export type UserRole = 'admin' | 'manager' | 'editor' | 'viewer';
+export type UserRole = 'admin' | 'collaborator' | 'manager' | 'editor' | 'viewer';
 
 export type TaskStatus = 'in_progress' | 'in_delivery' | 'completed' | 'cancelled';
-export type TaskType = 'sale' | 'delivery' | 'client_visit' | 'exchange' | 'purchase' | 'other';
+export type TaskType = 'vente' | 'troc' | 'delivery' | 'client_visit' | 'repair' | 'exchange' | 'purchase' | 'other';
 
 export interface Task {
   id: string;
@@ -62,6 +64,19 @@ export interface Task {
   date: string; // Operation date
   createdAt: string;
   updatedAt: string;
+
+  // Sale-specific fields
+  sellingPrice?: number;
+  client?: string;
+
+  // Trade-specific fields
+  outgoingProductId?: string;
+  outgoingProductPrice?: number;
+  incomingProductName?: string;
+  incomingProductImei?: string;
+  incomingProductPrice?: number;
+  incomingProductCategory?: string;
+  recoveredFrom?: string;
 }
 
 export type ExpenseCategory = 'transport' | 'utilities' | 'rent' | 'supplies' | 'marketing' | 'salary' | 'other';
@@ -78,6 +93,7 @@ export interface Expense {
 export interface DailyStats {
   date: string;
   sales: number;
+  purchases: number;
   profit: number;
   tasks: number;
   expenses: number;
@@ -85,6 +101,8 @@ export interface DailyStats {
 
 export interface MonthlyStats {
   totalSales: number;
+  totalPurchases: number;
+  globalBalance: number;
   totalProfit: number;
   totalExpenses: number;
   netProfit: number;
@@ -96,6 +114,8 @@ export interface MonthlyStats {
 
 export interface DailyOverview {
   sales: number;
+  purchases: number;
+  globalBalance: number;
   profit: number;
   expenses: number;
   netProfit: number;
@@ -110,6 +130,11 @@ export interface PaginatedResponse<T> {
   size: number;
   pages: number;
   total_value?: number;
-  total_profit?: number;
   total_amount?: number;
+}
+
+export interface InviteLink {
+  invite_token: string;
+  invite_url: string;
+  collaborator_id: string;
 }
