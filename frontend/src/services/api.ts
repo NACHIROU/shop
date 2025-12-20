@@ -1,6 +1,6 @@
 // ============= API Service Layer =============
 // This file provides the interface for all data operations.
-// Replace implementations with actual API calls when backend is ready.
+// Now connected to the real backend API.
 
 import type {
   Supplier,
@@ -13,34 +13,68 @@ import type {
   DailyStats,
   MonthlyStats,
   DailyOverview,
+  PaginatedResponse,
 } from '@/types';
 
-// Base API URL - replace with actual backend URL
+// Base API URL - proxied to backend
 const API_BASE_URL = '/api';
 
-// Generic fetch wrapper for future API implementation
+// Generic fetch wrapper with auth
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('access_token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options?.headers as Record<string, string>,
+  };
+
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
     ...options,
   });
-  
+
   if (!response.ok) {
-    throw new Error(`API Error: ${response.statusText}`);
+    const error = await response.text();
+    throw new Error(`API Error: ${response.status} - ${error}`);
   }
-  
+
   return response.json();
 }
 
+// ============= Auth API =============
+export const authApi = {
+  register: (data: { name: string; email: string; phone: string; password: string }) =>
+    apiFetch<{ access_token: string; refresh_token: string; token_type: string; user: any }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  login: (data: { email: string; password: string }) =>
+    apiFetch<{ access_token: string; refresh_token: string; token_type: string; user: any }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  createCollaborator: (data: { name: string; email: string; password: string; role: string; phone?: string }) =>
+    apiFetch<{ id: string; name: string; email: string; phone: string; role: string; is_active: boolean; created_at: string }>('/auth/collaborators', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getCollaborators: () =>
+    apiFetch<Collaborator[]>('/auth/collaborators'),
+  changePassword: (data: { new_password: string }) =>
+    apiFetch('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ new_password: data.new_password }),
+    }),
+};
 // ============= Suppliers API =============
 export const suppliersApi = {
-  getAll: (): Promise<Supplier[]> => apiFetch('/suppliers'),
+  getAll: (): Promise<Supplier[]> => apiFetch('/suppliers/'),
   getById: (id: string): Promise<Supplier> => apiFetch(`/suppliers/${id}`),
   create: (data: Omit<Supplier, 'id' | 'createdAt'>): Promise<Supplier> =>
-    apiFetch('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch('/suppliers/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Supplier>): Promise<Supplier> =>
     apiFetch(`/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string): Promise<void> =>
@@ -49,10 +83,11 @@ export const suppliersApi = {
 
 // ============= Products API =============
 export const productsApi = {
-  getAll: (): Promise<Product[]> => apiFetch('/products'),
+  getAll: (page: number = 1, limit: number = 50): Promise<PaginatedResponse<Product>> =>
+    apiFetch(`/products/?page=${page}&size=${limit}`),
   getById: (id: string): Promise<Product> => apiFetch(`/products/${id}`),
   create: (data: Omit<Product, 'id' | 'createdAt'>): Promise<Product> =>
-    apiFetch('/products', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch('/products/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Product>): Promise<Product> =>
     apiFetch(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string): Promise<void> =>
@@ -61,10 +96,10 @@ export const productsApi = {
 
 // ============= Collaborators API =============
 export const collaboratorsApi = {
-  getAll: (): Promise<Collaborator[]> => apiFetch('/collaborators'),
+  getAll: (): Promise<Collaborator[]> => apiFetch('/collaborators/'),
   getById: (id: string): Promise<Collaborator> => apiFetch(`/collaborators/${id}`),
   create: (data: Omit<Collaborator, 'id' | 'joinedAt' | 'tasksCompleted' | 'tasksInProgress'>): Promise<Collaborator> =>
-    apiFetch('/collaborators', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch('/collaborators/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Collaborator>): Promise<Collaborator> =>
     apiFetch(`/collaborators/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string): Promise<void> =>
@@ -73,12 +108,12 @@ export const collaboratorsApi = {
 
 // ============= Tasks API =============
 export const tasksApi = {
-  getAll: (): Promise<Task[]> => apiFetch('/tasks'),
+  getAll: (): Promise<Task[]> => apiFetch('/tasks/'),
   getById: (id: string): Promise<Task> => apiFetch(`/tasks/${id}`),
   getByCollaborator: (collaboratorId: string): Promise<Task[]> =>
-    apiFetch(`/tasks?collaboratorId=${collaboratorId}`),
+    apiFetch(`/tasks/?collaboratorId=${collaboratorId}`),
   create: (data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> =>
-    apiFetch('/tasks', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch('/tasks/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Task>): Promise<Task> =>
     apiFetch(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateStatus: (id: string, status: TaskStatus): Promise<Task> =>
@@ -89,12 +124,18 @@ export const tasksApi = {
 
 // ============= Expenses API =============
 export const expensesApi = {
-  getAll: (): Promise<Expense[]> => apiFetch('/expenses'),
+  getAll: (page: number = 1, limit: number = 50, startDate?: string, endDate?: string): Promise<PaginatedResponse<Expense>> => {
+    let query = `/expenses/?page=${page}&size=${limit}`;
+    if (startDate && endDate) {
+      query += `&startDate=${startDate}&endDate=${endDate}`;
+    }
+    return apiFetch(query);
+  },
   getById: (id: string): Promise<Expense> => apiFetch(`/expenses/${id}`),
   getByDateRange: (startDate: string, endDate: string): Promise<Expense[]> =>
-    apiFetch(`/expenses?startDate=${startDate}&endDate=${endDate}`),
+    apiFetch(`/expenses/?startDate=${startDate}&endDate=${endDate}`),
   create: (data: Omit<Expense, 'id' | 'createdAt'>): Promise<Expense> =>
-    apiFetch('/expenses', { method: 'POST', body: JSON.stringify(data) }),
+    apiFetch('/expenses/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Expense>): Promise<Expense> =>
     apiFetch(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string): Promise<void> =>

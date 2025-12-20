@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { formatCurrency } from '@/services/api';
 import type { Product, Supplier } from '@/types';
 import { Button } from '@/components/ui/button';
+import { PageLoader } from '@/components/ui/loader';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -32,75 +33,130 @@ import {
 import { Label } from '@/components/ui/label';
 import { Plus, Search, Edit2, Trash2, TrendingUp, Truck } from 'lucide-react';
 import { toast } from 'sonner';
-
-// Placeholder for API data - will be replaced with real API calls
-const initialProducts: Product[] = [];
-const initialSuppliers: Supplier[] = [];
+import { productsApi, suppliersApi } from '@/services/api';
 
 export default function Products() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [productList, setProductList] = useState<Product[]>(initialProducts);
-  const [suppliers] = useState<Supplier[]>(initialSuppliers);
+  const [productList, setProductList] = useState<Product[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [stats, setStats] = useState({ totalValue: 0, totalProfit: 0 });
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const [productsData, suppliersData] = await Promise.all([
+        productsApi.getAll(currentPage),
+        suppliersApi.getAll(),
+      ]);
+
+      // Map snake_case from backend to camelCase for frontend
+      const mappedProducts = productsData.items.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        purchasePrice: p.purchase_price, // Mapping here
+        sellingPrice: p.selling_price,   // Mapping here
+        stock: p.stock,
+        category: p.category,
+        supplierId: p.supplier_id,       // Mapping here
+        supplierName: p.supplier_name,   // Mapping here
+        createdAt: p.created_at
+      }));
+
+      setProductList(mappedProducts);
+      setTotalPages(productsData.pages);
+      setStats({
+        totalValue: productsData.total_value,
+        totalProfit: productsData.total_profit
+      });
+      setSuppliers(suppliersData);
+    } catch (error) {
+      toast.error('Erreur lors du chargement des données');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, [currentPage]);
 
   const filteredProducts = productList.filter(product =>
     product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     product.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAddProduct = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const supplierId = formData.get('supplier') as string;
-    const supplier = suppliers.find(s => s.id === supplierId);
-    
-    const newProduct: Product = {
-      id: String(Date.now()),
+
+    // Prepare payload in snake_case for backend
+    const payload = {
       name: formData.get('name') as string,
-      purchasePrice: Number(formData.get('purchasePrice')),
-      sellingPrice: Number(formData.get('sellingPrice')),
-      stock: Number(formData.get('stock')),
+      purchase_price: Number(formData.get('purchasePrice')),
+      selling_price: Number(formData.get('sellingPrice')),
       category: formData.get('category') as string,
-      supplierId: supplierId || undefined,
-      supplierName: supplier?.name,
-      createdAt: new Date().toISOString().split('T')[0],
+      stock: Number(formData.get('stock')),
+      supplier_id: (formData.get('supplier') as string) || undefined,
     };
-    setProductList([...productList, newProduct]);
-    setIsAddDialogOpen(false);
-    toast.success('Produit ajouté avec succès');
+
+    try {
+      // @ts-ignore
+      await productsApi.create(payload as any);
+
+      toast.success('Produit ajouté avec succès');
+      setIsAddDialogOpen(false);
+      fetchProducts();
+    } catch (error) {
+      toast.error('Erreur lors de l\'ajout du produit');
+      console.error(error);
+    }
   };
 
-  const handleEditProduct = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleEditProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingProduct) return;
-    
+
     const formData = new FormData(e.currentTarget);
-    const supplierId = formData.get('supplier') as string;
-    const supplier = suppliers.find(s => s.id === supplierId);
-    
-    const updatedProduct: Product = {
-      ...editingProduct,
+
+    const payload = {
       name: formData.get('name') as string,
-      purchasePrice: Number(formData.get('purchasePrice')),
-      sellingPrice: Number(formData.get('sellingPrice')),
-      stock: Number(formData.get('stock')),
+      purchase_price: Number(formData.get('purchasePrice')),
+      selling_price: Number(formData.get('sellingPrice')),
       category: formData.get('category') as string,
-      supplierId: supplierId || undefined,
-      supplierName: supplier?.name,
+      stock: Number(formData.get('stock')),
+      supplier_id: (formData.get('supplier') as string) || undefined,
     };
-    setProductList(productList.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-    setEditingProduct(null);
-    toast.success('Produit modifié avec succès');
+
+    try {
+      await productsApi.update(editingProduct.id, payload as any);
+      toast.success('Produit modifié avec succès');
+      setEditingProduct(null);
+      fetchProducts();
+    } catch (error) {
+      toast.error('Erreur lors de la modification du produit');
+      console.error(error);
+    }
   };
 
-  const handleDeleteProduct = (id: string) => {
-    setProductList(productList.filter(p => p.id !== id));
-    toast.success('Produit supprimé');
+  const handleDeleteProduct = async (id: string) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce produit ?')) return;
+    try {
+      await productsApi.delete(id);
+      toast.success('Produit supprimé');
+      fetchProducts();
+    } catch (error) {
+      toast.error('Erreur lors de la suppression');
+      console.error(error);
+    }
   };
 
-  const totalValue = productList.reduce((acc, p) => acc + (p.sellingPrice * p.stock), 0);
-  const totalProfit = productList.reduce((acc, p) => acc + ((p.sellingPrice - p.purchasePrice) * p.stock), 0);
+
 
   const ProductForm = ({ product, onSubmit }: { product?: Product; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void }) => (
     <form onSubmit={onSubmit}>
@@ -109,24 +165,27 @@ export default function Products() {
           <Label htmlFor="name">Nom du produit</Label>
           <Input id="name" name="name" defaultValue={product?.name} placeholder="iPhone 15 Pro 256GB" required />
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="category">Catégorie</Label>
-          <Input id="category" name="category" defaultValue={product?.category} placeholder="iPhone 15" required />
+        <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="category">Catégorie</Label>
+            <Input id="category" name="category" defaultValue={product?.category} placeholder="iPhone 15" required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="stock">Stock initial</Label>
+            <Input id="stock" name="stock" type="number" defaultValue={product?.stock || 0} required />
+          </div>
         </div>
         <div className="grid gap-2">
           <Label htmlFor="supplier">Fournisseur (optionnel)</Label>
-          <Select name="supplier" defaultValue={product?.supplierId}>
+          <Select name="supplier" defaultValue={product?.supplierId || "none"}>
             <SelectTrigger>
               <SelectValue placeholder="Sélectionner un fournisseur" />
             </SelectTrigger>
             <SelectContent>
-              {suppliers.length === 0 ? (
-                <SelectItem value="none" disabled>Aucun fournisseur disponible</SelectItem>
-              ) : (
-                suppliers.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))
-              )}
+              <SelectItem value="none">Aucun</SelectItem>
+              {suppliers.map(s => (
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -139,10 +198,6 @@ export default function Products() {
             <Label htmlFor="sellingPrice">Prix de vente (FCFA)</Label>
             <Input id="sellingPrice" name="sellingPrice" type="number" defaultValue={product?.sellingPrice} placeholder="820000" required />
           </div>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="stock">Stock {product ? 'actuel' : 'initial'}</Label>
-          <Input id="stock" name="stock" type="number" defaultValue={product?.stock} placeholder="10" required />
         </div>
       </div>
       <DialogFooter>
@@ -190,11 +245,11 @@ export default function Products() {
           </div>
           <div className="bg-card p-4 rounded-xl border border-border">
             <p className="text-sm text-muted-foreground">Valeur du stock</p>
-            <p className="text-2xl font-bold text-primary">{formatCurrency(totalValue)}</p>
+            <p className="text-2xl font-bold text-primary">{formatCurrency(stats.totalValue)}</p>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border">
             <p className="text-sm text-muted-foreground">Profit potentiel</p>
-            <p className="text-2xl font-bold text-success">{formatCurrency(totalProfit)}</p>
+            <p className="text-2xl font-bold text-success">{formatCurrency(stats.totalProfit)}</p>
           </div>
         </div>
 
@@ -211,7 +266,9 @@ export default function Products() {
         </div>
 
         {/* Products Table */}
-        {productList.length === 0 ? (
+        {loading ? (
+          <PageLoader />
+        ) : productList.length === 0 ? (
           <div className="bg-card rounded-xl border border-border shadow-sm p-12 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <Plus className="w-8 h-8 text-muted-foreground" />
@@ -241,7 +298,9 @@ export default function Products() {
               <TableBody>
                 {filteredProducts.map((product) => {
                   const profit = product.sellingPrice - product.purchasePrice;
-                  const margin = ((profit / product.purchasePrice) * 100).toFixed(0);
+                  const margin = product.purchasePrice > 0
+                    ? ((profit / product.purchasePrice) * 100).toFixed(0)
+                    : '100';
                   return (
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">{product.name}</TableCell>
@@ -277,8 +336,8 @@ export default function Products() {
                           <Button variant="ghost" size="icon" onClick={() => setEditingProduct(product)}>
                             <Edit2 className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteProduct(product.id)}
                           >
@@ -291,6 +350,31 @@ export default function Products() {
                 })}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              Précédent
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} sur {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Suivant
+            </Button>
           </div>
         )}
 

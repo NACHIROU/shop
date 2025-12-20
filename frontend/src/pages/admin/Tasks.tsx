@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { 
-  getStatusLabel, 
-  getStatusColor, 
+import {
+  getStatusLabel,
+  getStatusColor,
   getTaskTypeLabel,
-  formatDate
+  formatDate,
+  tasksApi,
+  authApi,
+  productsApi
 } from '@/services/api';
 import type { Task, TaskStatus, Collaborator, Product } from '@/types';
 import { Button } from '@/components/ui/button';
+import { PageLoader } from '@/components/ui/loader';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -28,9 +32,9 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Plus, 
-  Search, 
+import {
+  Plus,
+  Search,
   Package,
   Truck,
   Users,
@@ -47,11 +51,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-// Placeholder for API data - will be replaced with real API calls
-const initialTasks: Task[] = [];
-const initialCollaborators: Collaborator[] = [];
-const initialProducts: Product[] = [];
 
 const typeIcons = {
   sale: Package,
@@ -74,53 +73,107 @@ export default function Tasks() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [taskList, setTaskList] = useState<Task[]>(initialTasks);
-  const [collaborators] = useState<Collaborator[]>(initialCollaborators);
-  const [products] = useState<Product[]>(initialProducts);
+  const [taskList, setTaskList] = useState<Task[]>([]);
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [tasksData, collaboratorsData, productsData] = await Promise.all([
+        tasksApi.getAll(),
+        authApi.getCollaborators(),
+        productsApi.getAll()
+      ]);
+
+      // Map backend snake_case to frontend camelCase
+      const mappedTasks = tasksData.map((t: any) => ({
+        ...t,
+        assignedTo: t.assigned_to,
+        assignedToName: t.assigned_to_name || t.assignedToName,
+        productId: t.product_id,
+        productName: t.product_name,
+        clientName: t.client_name,
+        clientPhone: t.client_phone,
+        createdAt: t.created_at || t.createdAt,
+        updatedAt: t.updated_at || t.updatedAt,
+      }));
+
+      setTaskList(mappedTasks);
+      setCollaborators(collaboratorsData);
+      setProducts(productsData.items);
+    } catch (error) {
+      console.error(error);
+      toast.error('Erreur lors du chargement des données');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const filteredTasks = taskList.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.assignedToName.toLowerCase().includes(searchQuery.toLowerCase());
+      task.assignedToName?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const handleAddTask = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddTask = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const assignedId = formData.get('assignedTo') as string;
-    const assignedCollab = collaborators.find(c => c.id === assignedId);
-    const productId = formData.get('product') as string;
-    const product = products.find(p => p.id === productId);
-    
-    const newTask: Task = {
-      id: String(Date.now()),
+
+    // Prepare payload for backend (snake_case generally preferred/expected if Pydantic uses it, 
+    // but verifying api.ts service might just pass through. 
+    // If backend uses Pydantic BaseModel, it accepts snake_case by default or aliases.
+    // Let's use what we used elsewhere or default to snake_case for safety).
+    const payload = {
       title: formData.get('title') as string,
       description: formData.get('description') as string,
       type: formData.get('type') as Task['type'],
       status: 'in_progress',
-      assignedTo: assignedId,
-      assignedToName: assignedCollab?.name || '',
-      productId: productId || undefined,
-      productName: product?.name,
-      clientName: formData.get('clientName') as string,
-      clientPhone: formData.get('clientPhone') as string,
+      assigned_to: formData.get('assignedTo') as string,
+      product_id: (formData.get('product') as string) || undefined,
+      client_name: (formData.get('clientName') as string) || undefined,
+      client_phone: (formData.get('clientPhone') as string) || undefined,
       date: formData.get('date') as string,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
     };
-    setTaskList([newTask, ...taskList]);
-    setIsAddDialogOpen(false);
-    toast.success('Tâche créée avec succès');
+
+    try {
+      await tasksApi.create(payload as any);
+      toast.success('Tâche créée avec succès');
+      setIsAddDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la création de la tâche");
+    }
   };
 
-  const handleUpdateStatus = (taskId: string, newStatus: TaskStatus) => {
-    setTaskList(taskList.map(t => 
-      t.id === taskId 
-        ? { ...t, status: newStatus, updatedAt: new Date().toISOString() }
-        : t
-    ));
-    toast.success('Statut mis à jour');
+  const handleUpdateStatus = async (taskId: string, newStatus: TaskStatus) => {
+    try {
+      await tasksApi.updateStatus(taskId, newStatus);
+      toast.success('Statut mis à jour');
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la mise à jour du statut");
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche ?")) return;
+    try {
+      await tasksApi.delete(taskId);
+      toast.success('Tâche supprimée');
+      fetchData();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression");
+    }
   };
 
   const statusCounts = {
@@ -289,7 +342,9 @@ export default function Tasks() {
         </div>
 
         {/* Tasks List */}
-        {taskList.length === 0 ? (
+        {isLoading ? (
+          <PageLoader />
+        ) : taskList.length === 0 ? (
           <div className="bg-card rounded-xl border border-border shadow-sm p-12 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <Clock className="w-8 h-8 text-muted-foreground" />
@@ -306,7 +361,7 @@ export default function Tasks() {
             {filteredTasks.map((task) => {
               const Icon = typeIcons[task.type];
               return (
-                <div 
+                <div
                   key={task.id}
                   className="bg-card p-4 rounded-xl border border-border shadow-sm hover:shadow-md transition-all animate-fade-in"
                 >
@@ -340,11 +395,17 @@ export default function Tasks() {
                               <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'completed')}>
                                 Marquer terminée
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 className="text-destructive"
                                 onClick={() => handleUpdateStatus(task.id, 'cancelled')}
                               >
                                 Annuler
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => handleDeleteTask(task.id)}
+                              >
+                                Supprimer
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

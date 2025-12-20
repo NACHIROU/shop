@@ -5,6 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
+// Pages
+import Login from "./pages/Login";
+
 // Admin Pages
 import AdminDashboard from "./pages/admin/Dashboard";
 import Products from "./pages/admin/Products";
@@ -22,24 +25,40 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 function AppRoutes() {
-  const { role } = useAuth();
+  const { user, role, loading } = useAuth();
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Chargement...</div>;
+  }
+
+  if (!user) {
+    return <Login />;
+  }
 
   return (
     <Routes>
       {/* Admin Routes */}
-      <Route path="/" element={role === 'admin' ? <AdminDashboard /> : <Navigate to="/collaborator" />} />
-      <Route path="/products" element={role === 'admin' ? <Products /> : <Navigate to="/collaborator" />} />
-      <Route path="/suppliers" element={role === 'admin' ? <Suppliers /> : <Navigate to="/collaborator" />} />
-      <Route path="/collaborators" element={role === 'admin' ? <Collaborators /> : <Navigate to="/collaborator" />} />
-      <Route path="/tasks" element={role === 'admin' ? <Tasks /> : <Navigate to="/collaborator" />} />
-      <Route path="/expenses" element={role === 'admin' ? <Expenses /> : <Navigate to="/collaborator" />} />
-      
+      {role === 'admin' && (
+        <>
+          <Route path="/" element={<AdminDashboard />} />
+          <Route path="/products" element={<Products />} />
+          <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/collaborators" element={<Collaborators />} />
+          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/expenses" element={<Expenses />} />
+        </>
+      )}
+
       {/* Collaborator Routes */}
-      <Route path="/collaborator" element={<CollaboratorDashboard />} />
-      <Route path="/collaborator/tasks" element={<CollaboratorTasks />} />
-      
-      {/* Catch-all */}
-      <Route path="*" element={<NotFound />} />
+      {role === 'collaborator' && (
+        <>
+          <Route path="/" element={<CollaboratorDashboard />} />
+          <Route path="/tasks" element={<CollaboratorTasks />} />
+        </>
+      )}
+
+      {/* Redirect based on role */}
+      <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
 }

@@ -9,6 +9,13 @@ export interface Supplier {
   notes?: string;
   createdAt: string;
 }
+export interface SupplierInput {
+  name: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  notes?: string;
+}
 
 export interface Product {
   id: string;
@@ -33,6 +40,8 @@ export interface Collaborator {
   joinedAt: string;
   avatar?: string;
 }
+
+export type UserRole = 'admin' | 'manager' | 'editor' | 'viewer';
 
 export type TaskStatus = 'in_progress' | 'in_delivery' | 'completed' | 'cancelled';
 export type TaskType = 'sale' | 'delivery' | 'client_visit' | 'exchange' | 'purchase' | 'other';
@@ -92,4 +101,15 @@ export interface DailyOverview {
   netProfit: number;
   newTasks: number;
   completedTasks: number;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+  total_value?: number;
+  total_profit?: number;
+  total_amount?: number;
 }

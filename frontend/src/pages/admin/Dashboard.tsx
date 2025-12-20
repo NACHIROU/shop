@@ -1,15 +1,52 @@
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { SalesChart } from '@/components/dashboard/SalesChart';
 import { ProfitChart } from '@/components/dashboard/ProfitChart';
 import { formatCurrency } from '@/services/api';
 import { TrendingUp, Package, Clock, CheckCircle2, XCircle } from 'lucide-react';
-
-// Placeholder stats - will be fetched from API
-const dailyStats = { sales: 0, profit: 0, expenses: 0, netProfit: 0, newTasks: 0, completedTasks: 0 };
-const monthlyStats = { totalSales: 0, totalProfit: 0, totalExpenses: 0, netProfit: 0, totalTasks: 0, completedTasks: 0, inProgressTasks: 0, cancelledTasks: 0 };
+import { api } from '@/services/api';
+import type { DailyOverview, MonthlyStats } from '@/types';
 
 export default function AdminDashboard() {
+  const [dailyStats, setDailyStats] = useState<DailyOverview>({
+    sales: 0,
+    profit: 0,
+    expenses: 0,
+    netProfit: 0,
+    newTasks: 0,
+    completedTasks: 0,
+  });
+  const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>({
+    totalSales: 0,
+    totalProfit: 0,
+    totalExpenses: 0,
+    netProfit: 0,
+    totalTasks: 0,
+    completedTasks: 0,
+    inProgressTasks: 0,
+    cancelledTasks: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [daily, monthly] = await Promise.all([
+          api.stats.getDaily(),
+          api.stats.getMonthly(),
+        ]);
+        setDailyStats(daily);
+        setMonthlyStats(monthly);
+      } catch (error) {
+        console.error('Error fetching stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
   return (
     <DashboardLayout>
       <div className="space-y-6">

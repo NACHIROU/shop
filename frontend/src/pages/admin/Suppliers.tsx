@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
+import { PageLoader } from '@/components/ui/loader';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -24,61 +25,103 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Search, Edit2, Trash2, Phone, Mail, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Supplier } from '@/types';
-import { formatDate } from '@/services/api';
-
-// Placeholder for API data - will be replaced with real API calls
-const initialSuppliers: Supplier[] = [];
+import type { Supplier, SupplierInput } from '@/types';
+import { formatDate, suppliersApi } from '@/services/api';
 
 export default function Suppliers() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [supplierList, setSupplierList] = useState<Supplier[]>(initialSuppliers);
+  const [supplierList, setSupplierList] = useState<Supplier[]>([]);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchSuppliers = async () => {
+    try {
+      setIsLoading(true);
+      const data = await suppliersApi.getAll();
+      // Handle potential field mismatch if backend returns created_at
+      const mappedData = data.map((item: any) => ({
+        ...item,
+        createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+      }));
+      setSupplierList(mappedData);
+    } catch (error) {
+      console.error('Failed to fetch suppliers:', error);
+      toast.error('Erreur lors du chargement des fournisseurs');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSuppliers();
+  }, []);
 
   const filteredSuppliers = supplierList.filter(supplier =>
     supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     supplier.phone.includes(searchQuery)
   );
 
-  const handleAddSupplier = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddSupplier = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     const formData = new FormData(e.currentTarget);
-    const newSupplier: Supplier = {
-      id: String(Date.now()),
+
+    const payload: SupplierInput = {
       name: formData.get('name') as string,
       phone: formData.get('phone') as string,
-      email: formData.get('email') as string || undefined,
-      address: formData.get('address') as string || undefined,
-      notes: formData.get('notes') as string || undefined,
-      createdAt: new Date().toISOString(),
+      email: (formData.get('email') as string) || undefined,
+      address: (formData.get('address') as string) || undefined,
+      notes: (formData.get('notes') as string) || undefined,
     };
-    setSupplierList([...supplierList, newSupplier]);
-    setIsAddDialogOpen(false);
-    toast.success('Fournisseur ajouté avec succès');
+
+    try {
+      await suppliersApi.create(payload);
+      toast.success('Fournisseur ajouté avec succès');
+      setIsAddDialogOpen(false);
+      fetchSuppliers();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'ajout du fournisseur");
+    }
   };
 
-  const handleEditSupplier = (e: React.FormEvent<HTMLFormElement>) => {
+
+  const handleEditSupplier = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingSupplier) return;
-    
+
     const formData = new FormData(e.currentTarget);
-    const updatedSupplier: Supplier = {
-      ...editingSupplier,
+    const payload: Partial<Supplier> = {
       name: formData.get('name') as string,
       phone: formData.get('phone') as string,
       email: formData.get('email') as string || undefined,
       address: formData.get('address') as string || undefined,
       notes: formData.get('notes') as string || undefined,
     };
-    setSupplierList(supplierList.map(s => s.id === updatedSupplier.id ? updatedSupplier : s));
-    setEditingSupplier(null);
-    toast.success('Fournisseur modifié avec succès');
+
+    try {
+      await suppliersApi.update(editingSupplier.id, payload);
+      toast.success('Fournisseur modifié avec succès');
+      setEditingSupplier(null);
+      fetchSuppliers();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la modification du fournisseur");
+    }
   };
 
-  const handleDeleteSupplier = (id: string) => {
-    setSupplierList(supplierList.filter(s => s.id !== id));
-    toast.success('Fournisseur supprimé');
+  const handleDeleteSupplier = async (id: string) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce fournisseur ?')) return;
+
+    try {
+      await suppliersApi.delete(id);
+      toast.success('Fournisseur supprimé');
+      fetchSuppliers();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression du fournisseur");
+    }
   };
 
   const SupplierForm = ({ supplier, onSubmit }: { supplier?: Supplier; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void }) => (
@@ -144,8 +187,13 @@ export default function Suppliers() {
 
         {/* Stats Card */}
         <div className="bg-card p-4 rounded-xl border border-border">
-          <p className="text-sm text-muted-foreground">Total fournisseurs</p>
-          <p className="text-2xl font-bold">{supplierList.length}</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-muted-foreground">Total fournisseurs</p>
+              <p className="text-2xl font-bold">{supplierList.length}</p>
+            </div>
+            {isLoading && <span className="loading loading-spinner loading-sm"></span>}
+          </div>
         </div>
 
         {/* Search */}
@@ -161,7 +209,9 @@ export default function Suppliers() {
         </div>
 
         {/* Suppliers Table */}
-        {supplierList.length === 0 ? (
+        {isLoading ? (
+          <PageLoader />
+        ) : supplierList.length === 0 ? (
           <div className="bg-card rounded-xl border border-border shadow-sm p-12 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <Plus className="w-8 h-8 text-muted-foreground" />
@@ -229,8 +279,8 @@ export default function Suppliers() {
                         <Button variant="ghost" size="icon" onClick={() => setEditingSupplier(supplier)}>
                           <Edit2 className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="icon"
                           onClick={() => handleDeleteSupplier(supplier.id)}
                         >

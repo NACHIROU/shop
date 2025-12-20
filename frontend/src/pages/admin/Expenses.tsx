@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,10 +32,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Plus, Search, Edit2, Trash2, Receipt, TrendingDown } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Expense, ExpenseCategory } from '@/types';
-import { formatCurrency, getExpenseCategoryLabel, formatDate } from '@/services/api';
-
-// Placeholder for API data - will be replaced with real API calls
-const initialExpenses: Expense[] = [];
+import { formatCurrency, getExpenseCategoryLabel, formatDate, expensesApi, statsApi } from '@/services/api';
+import { PageLoader } from '@/components/ui/loader';
 
 const expenseCategories: { value: ExpenseCategory; label: string }[] = [
   { value: 'transport', label: 'Transport' },
@@ -63,62 +61,107 @@ const getCategoryColor = (category: ExpenseCategory): string => {
 export default function Expenses() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [expenseList, setExpenseList] = useState<Expense[]>(initialExpenses);
+  const [expenseList, setExpenseList] = useState<Expense[]>([]);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | 'all'>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [monthlyExpenses, setMonthlyExpenses] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const fetchExpenses = async () => {
+    try {
+      setIsLoading(true);
+      const [data, monthlyStats] = await Promise.all([
+        expensesApi.getAll(currentPage),
+        statsApi.getMonthly()
+      ]);
+
+      const mappedData = data.items.map((item: any) => ({
+        ...item,
+        createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+      }));
+
+      setExpenseList(mappedData);
+      setTotalPages(data.pages);
+      setTotalCount(data.total);
+      setTotalExpenses(data.total_amount);
+      setMonthlyExpenses(monthlyStats.totalExpenses);
+    } catch (error) {
+      console.error(error);
+      toast.error('Erreur lors du chargement des dépenses');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchExpenses();
+  }, [currentPage]);
 
   const filteredExpenses = expenseList.filter(expense => {
-    const matchesSearch = expense.note?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const matchesSearch = expense.note?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       getExpenseCategoryLabel(expense.category).toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
-  const totalExpenses = expenseList.reduce((acc, e) => acc + e.amount, 0);
-  const monthlyExpenses = expenseList
-    .filter(e => {
-      const expenseDate = new Date(e.date);
-      const now = new Date();
-      return expenseDate.getMonth() === now.getMonth() && expenseDate.getFullYear() === now.getFullYear();
-    })
-    .reduce((acc, e) => acc + e.amount, 0);
-
-  const handleAddExpense = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddExpense = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const newExpense: Expense = {
-      id: String(Date.now()),
+    const newExpensePayload = {
       amount: Number(formData.get('amount')),
       category: formData.get('category') as ExpenseCategory,
       date: formData.get('date') as string,
       note: formData.get('note') as string || undefined,
-      createdAt: new Date().toISOString(),
     };
-    setExpenseList([newExpense, ...expenseList]);
-    setIsAddDialogOpen(false);
-    toast.success('Dépense ajoutée avec succès');
+
+    try {
+      await expensesApi.create(newExpensePayload);
+      toast.success('Dépense ajoutée avec succès');
+      setIsAddDialogOpen(false);
+      fetchExpenses();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'ajout de la dépense");
+    }
   };
 
-  const handleEditExpense = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleEditExpense = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingExpense) return;
-    
+
     const formData = new FormData(e.currentTarget);
-    const updatedExpense: Expense = {
-      ...editingExpense,
+    const updatedPayload: Partial<Expense> = {
       amount: Number(formData.get('amount')),
       category: formData.get('category') as ExpenseCategory,
       date: formData.get('date') as string,
       note: formData.get('note') as string || undefined,
     };
-    setExpenseList(expenseList.map(exp => exp.id === updatedExpense.id ? updatedExpense : exp));
-    setEditingExpense(null);
-    toast.success('Dépense modifiée avec succès');
+
+    try {
+      await expensesApi.update(editingExpense.id, updatedPayload);
+      toast.success('Dépense modifiée avec succès');
+      setEditingExpense(null);
+      fetchExpenses();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la modification");
+    }
   };
 
-  const handleDeleteExpense = (id: string) => {
-    setExpenseList(expenseList.filter(e => e.id !== id));
-    toast.success('Dépense supprimée');
+  const handleDeleteExpense = async (id: string) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette dépense ?")) return;
+    try {
+      await expensesApi.delete(id);
+      toast.success('Dépense supprimée');
+      fetchExpenses();
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression");
+    }
   };
 
   const ExpenseForm = ({ expense, onSubmit }: { expense?: Expense; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void }) => (
@@ -143,7 +186,7 @@ export default function Expenses() {
         </div>
         <div className="grid gap-2">
           <Label htmlFor="date">Date *</Label>
-          <Input id="date" name="date" type="date" defaultValue={expense?.date || new Date().toISOString().split('T')[0]} required />
+          <Input id="date" name="date" type="date" defaultValue={expense?.date ? new Date(expense.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]} required />
         </div>
         <div className="grid gap-2">
           <Label htmlFor="note">Note (optionnel)</Label>
@@ -194,7 +237,7 @@ export default function Expenses() {
               <Receipt className="w-4 h-4 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">Total dépenses</p>
             </div>
-            <p className="text-2xl font-bold">{expenseList.length}</p>
+            <p className="text-2xl font-bold">{formatCurrency(totalCount)}</p> {/* Total count */}
           </div>
           <div className="bg-card p-4 rounded-xl border border-border">
             <div className="flex items-center gap-2 mb-2">
@@ -235,7 +278,9 @@ export default function Expenses() {
         </div>
 
         {/* Expenses Table */}
-        {expenseList.length === 0 ? (
+        {isLoading ? (
+          <PageLoader />
+        ) : expenseList.length === 0 ? (
           <div className="bg-card rounded-xl border border-border shadow-sm p-12 text-center animate-fade-in">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <Receipt className="w-8 h-8 text-muted-foreground" />
@@ -285,8 +330,8 @@ export default function Expenses() {
                         <Button variant="ghost" size="icon" onClick={() => setEditingExpense(expense)}>
                           <Edit2 className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="icon"
                           onClick={() => handleDeleteExpense(expense.id)}
                         >
@@ -298,6 +343,31 @@ export default function Expenses() {
                 ))}
               </TableBody>
             </Table>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
+              Précédent
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} sur {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
+              Suivant
+            </Button>
           </div>
         )}
 

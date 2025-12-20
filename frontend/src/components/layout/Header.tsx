@@ -1,5 +1,5 @@
-import { Bell, Search, User } from 'lucide-react';
-import { useAuth, UserRole } from '@/contexts/AuthContext';
+import { Bell, Search, User, LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,13 +10,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export function Header() {
-  const { user, role, setRole } = useAuth();
+  const { user, logout } = useAuth();
 
-  const handleRoleSwitch = (newRole: UserRole) => {
-    setRole(newRole);
+  const handleLogout = () => {
+    logout();
   };
 
   return (
@@ -35,54 +35,30 @@ export function Header() {
 
       {/* Right side */}
       <div className="flex items-center gap-4">
-        {/* Role Switcher (Demo) */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Badge variant={role === 'admin' ? 'default' : 'secondary'} className="text-xs">
-                {role === 'admin' ? 'Admin' : 'Collaborateur'}
-              </Badge>
-              <span className="text-xs text-muted-foreground">Démo</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Changer de rôle</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => handleRoleSwitch('admin')}>
-              Vue Admin
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleRoleSwitch('collaborator')}>
-              Vue Collaborateur
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full" />
+        <Button variant="ghost" size="sm">
+          <Bell className="w-4 h-4" />
         </Button>
 
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-3 h-auto py-2">
-              <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center">
-                <User className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <div className="text-left hidden md:block">
-                <p className="text-sm font-medium">{user?.name}</p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
-              </div>
+            <Button variant="ghost" size="sm" className="gap-2">
+              <Avatar className="w-6 h-6">
+                <AvatarFallback className="text-xs">
+                  {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm">{user?.name || 'Utilisateur'}</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end">
             <DropdownMenuLabel>Mon compte</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profil</DropdownMenuItem>
-            <DropdownMenuItem>Paramètres</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Déconnexion</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Se déconnecter
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
