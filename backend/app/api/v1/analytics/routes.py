@@ -1,12 +1,16 @@
 from fastapi import APIRouter, Depends, Query, Body
-from app.schemas.analytics import DailyOverview, MonthlyStats, DailyStats
+from app.schemas.analytics import DailyOverview, MonthlyStats, DailyStats, GlobalStats
 from app.services.analytics_service import AnalyticsService
 from app.services.email_service import EmailService
-from app.core.dependencies import get_current_admin_or_collaborator
+from app.core.dependencies import get_current_admin_or_collaborator, get_current_superadmin
 from app.models.user import User
 from datetime import datetime, timedelta
 
 router = APIRouter()
+
+@router.get("/global", response_model=GlobalStats)
+async def get_global_stats(current_superadmin: User = Depends(get_current_superadmin)):
+    return await AnalyticsService.get_global_stats()
 
 @router.get("/daily", response_model=DailyOverview)
 async def get_daily_overview(current_user: User = Depends(get_current_admin_or_collaborator)):

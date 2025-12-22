@@ -49,6 +49,7 @@ class TaskResponse(BaseModel):
     assigned_to_name: str
     product_id: Optional[str] = None
     product_name: Optional[str] = None
+    product_imei: Optional[str] = None
     quantity: Optional[int] = None
     client_name: Optional[str] = None
     client_phone: Optional[str] = None

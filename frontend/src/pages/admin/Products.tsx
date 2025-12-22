@@ -49,7 +49,7 @@ export default function Products() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isGrouped, setIsGrouped] = useState(false);
+  const [viewMode, setViewMode] = useState<'detailed' | 'grouped' | 'smart'>('detailed');
   const [isVendus, setIsVendus] = useState(false);
   const { isPrivate } = usePrivacy();
 
@@ -363,14 +363,33 @@ export default function Products() {
                 <SelectItem value="Autres">Autres</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              variant={isGrouped ? "secondary" : "outline"}
-              onClick={() => setIsGrouped(!isGrouped)}
-              className="gap-2"
-            >
-              <TrendingUp className="w-4 h-4" />
-              {isGrouped ? "Vue détaillée" : "Vue groupée"}
-            </Button>
+            <div className="flex bg-muted p-1 rounded-lg">
+              <Button
+                variant={viewMode === 'detailed' ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode('detailed')}
+                className="text-xs h-8"
+              >
+                Détaillée
+              </Button>
+              <Button
+                variant={viewMode === 'grouped' ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode('grouped')}
+                className="text-xs h-8"
+              >
+                Groupée
+              </Button>
+              <Button
+                variant={viewMode === 'smart' ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode('smart')}
+                className="text-xs h-8 gap-1"
+              >
+                <TrendingUp className="w-3 h-3 text-blue-500" />
+                Smart
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -396,7 +415,7 @@ export default function Products() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Produit</TableHead>
-                    {!isGrouped && <TableHead>IMEI</TableHead>}
+                    {(viewMode === 'detailed') && <TableHead>IMEI</TableHead>}
                     <TableHead>Catégorie</TableHead>
                     {isVendus ? (
                       <>
@@ -407,7 +426,7 @@ export default function Products() {
                       </>
                     ) : (
                       <>
-                        {!isGrouped && <TableHead>Fournisseur</TableHead>}
+                        {(viewMode === 'detailed') && <TableHead>Fournisseur</TableHead>}
                         <TableHead className="text-right">Prix d'achat</TableHead>
                         <TableHead className="text-center">Stock</TableHead>
                       </>
@@ -418,7 +437,8 @@ export default function Products() {
                 <TableBody>
                   {(() => {
                     let displayProducts = productList;
-                    if (isGrouped) {
+
+                    if (viewMode === 'grouped') {
                       const groups = productList.reduce((acc: any, p) => {
                         const key = `${p.name}-${p.category}`;
                         if (!acc[key]) {
@@ -429,19 +449,52 @@ export default function Products() {
                         return acc;
                       }, {});
                       displayProducts = Object.values(groups);
+                    } else if (viewMode === 'smart') {
+                      // Smart grouping logic: Extract Model and Storage
+                      const smartGroups = productList.reduce((acc: any, p) => {
+                        // Extract storage (64GB, 128GB, etc.)
+                        const storageMatch = p.name.match(/(\d+)\s*(GB|TB)/i) || (p.description || '').match(/(\d+)\s*(GB|TB)/i);
+                        const storage = storageMatch ? storageMatch[0].toUpperCase().replace(' ', '') : 'Standard';
+
+                        // Extract base model (e.g. iPhone 15, Samsung S24)
+                        let model = p.name;
+                        const modelMatch = p.name.match(/(iPhone\s*\d+\s*(Pro\s*Max|Pro|Plus|Mini|SE)?)|(Samsung\s*[S|A|Z]\d+\s*[+]?)/i);
+                        if (modelMatch) {
+                          model = modelMatch[0].trim();
+                        } else {
+                          // Fallback to name without storage
+                          model = p.name.replace(/(\d+)\s*(GB|TB)/i, '').trim();
+                        }
+
+                        const key = `${model}-${storage}`;
+                        if (!acc[key]) {
+                          acc[key] = {
+                            id: key,
+                            name: `${model} ${storage !== 'Standard' ? storage : ''}`,
+                            category: p.category,
+                            stock: 0,
+                            count: 0,
+                            purchasePrice: p.purchasePrice, // Use as base/average
+                          };
+                        }
+                        acc[key].stock += p.stock;
+                        acc[key].count += 1;
+                        return acc;
+                      }, {});
+                      displayProducts = Object.values(smartGroups);
                     }
 
                     return displayProducts.map((product: any) => (
                       <TableRow key={product.id}>
                         <TableCell className="font-medium">
                           {product.name}
-                          {isGrouped && product.count > 1 && (
+                          {viewMode !== 'detailed' && product.count > 1 && (
                             <span className="text-xs text-muted-foreground ml-2">
                               ({product.count} variations)
                             </span>
                           )}
                         </TableCell>
-                        {!isGrouped && <TableCell className="font-mono text-sm">{product.imei}</TableCell>}
+                        {viewMode === 'detailed' && <TableCell className="font-mono text-sm">{product.imei}</TableCell>}
                         <TableCell>
                           <Badge variant="secondary">{product.category}</Badge>
                         </TableCell>
@@ -456,7 +509,7 @@ export default function Products() {
                           </>
                         ) : (
                           <>
-                            {!isGrouped && (
+                            {viewMode === 'detailed' && (
                               <TableCell>
                                 {product.supplierName ? (
                                   <div className="flex items-center gap-1 text-sm">
@@ -497,7 +550,7 @@ export default function Products() {
                                 </PopoverContent>
                               </Popover>
                             )}
-                            {!isGrouped && (
+                            {viewMode === 'detailed' && (
                               <>
                                 <Button variant="ghost" size="icon" onClick={() => setEditingProduct(product)}>
                                   <Edit2 className="w-4 h-4" />

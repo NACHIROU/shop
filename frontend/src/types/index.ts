@@ -115,6 +115,7 @@ export interface MonthlyStats {
   completedTasks: number;
   inProgressTasks: number;
   cancelledTasks: number;
+  totalValue: number;
 }
 
 export interface DailyOverview {
@@ -126,6 +127,7 @@ export interface DailyOverview {
   netProfit: number;
   newTasks: number;
   completedTasks: number;
+  totalValue: number;
 }
 
 export interface PaginatedResponse<T> {

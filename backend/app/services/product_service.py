@@ -8,7 +8,8 @@ from bson import ObjectId
 
 class ProductService:
     @staticmethod
-    async def create_product(admin_id: str, product_data: ProductCreate) -> Product:
+    async def create_product(admin_id: str, product_data: ProductCreate, actor_id: str, actor_name: str) -> Product:
+        from app.services.audit_log_service import AuditLogService
         # Validate IMEI uniqueness per admin (only if IMEI is provided)
         if product_data.imei:
             existing = await products_collection.find_one({
@@ -48,6 +49,16 @@ class ProductService:
         )
         await operations_collection.insert_one(operation.dict(by_alias=True))
 
+        await AuditLogService.log_action(
+            admin_id=admin_id,
+            user_id=actor_id,
+            user_name=actor_name,
+            action="create_product",
+            resource_type="product",
+            resource_id=str(product.id),
+            details=f"Création du produit: {product.name}"
+        )
+
         return product
 
     @staticmethod
@@ -62,7 +73,9 @@ class ProductService:
     ) -> dict:
         import math
         skip = (page - 1) * size
-        query = {"admin_id": admin_id} if admin_id else {}
+        if not admin_id:
+            raise HTTPException(status_code=403, detail="Admin ID required for isolation")
+        query = {"admin_id": admin_id}
         query["is_archived"] = is_archived
         
         # Add search filter
@@ -185,7 +198,8 @@ class ProductService:
         return data
 
     @staticmethod
-    async def update_product(product_id: str, admin_id: str, update_data: ProductUpdate) -> ProductResponse:
+    async def update_product(product_id: str, admin_id: str, update_data: ProductUpdate, actor_id: str, actor_name: str) -> ProductResponse:
+        from app.services.audit_log_service import AuditLogService
         try:
             oid = ObjectId(product_id)
         except:
@@ -217,11 +231,23 @@ class ProductService:
             )
             if result.matched_count == 0:
                 raise HTTPException(status_code=404, detail=f"Product {product_id} not found or not owned by admin {admin_id}")
+            
+            await AuditLogService.log_action(
+                admin_id=admin_id,
+                user_id=actor_id,
+                user_name=actor_name,
+                action="update_product",
+                resource_type="product",
+                resource_id=product_id,
+                details=f"Mise à jour du produit",
+                changes=update_dict
+            )
         
         return await ProductService.get_product_by_id(product_id, admin_id)
 
     @staticmethod
-    async def delete_product(product_id: str, admin_id: str):
+    async def delete_product(product_id: str, admin_id: str, actor_id: str, actor_name: str):
+        from app.services.audit_log_service import AuditLogService
         try:
             oid = ObjectId(product_id)
         except:
@@ -230,15 +256,26 @@ class ProductService:
         result = await products_collection.delete_one({"_id": oid, "admin_id": admin_id})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Product not found")
+            
+        await AuditLogService.log_action(
+            admin_id=admin_id,
+            user_id=actor_id,
+            user_name=actor_name,
+            action="delete_product",
+            resource_type="product",
+            resource_id=product_id,
+            details=f"Suppression du produit"
+        )
 
     @staticmethod
-    async def _calculate_stock(product_id: str, admin_id: Optional[str] = None, base_stock: int = 0) -> int:
+    async def _calculate_stock(product_id: str, admin_id: str, base_stock: int = 0) -> int:
         # Purchases increase stock, sales decrease
         # We start with base_stock (initial stock set on product)
+        # Isolation: Mandatory admin_id
         purchases = await operations_collection.count_documents(
-            {"product_id": product_id, "type": "purchase"} | ({"admin_id": admin_id} if admin_id else {})
+            {"product_id": product_id, "type": "purchase", "admin_id": admin_id}
         )
         sales = await operations_collection.count_documents(
-            {"product_id": product_id, "type": "sale"} | ({"admin_id": admin_id} if admin_id else {})
+            {"product_id": product_id, "type": "sale", "admin_id": admin_id}
         )
         return base_stock + purchases - sales

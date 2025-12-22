@@ -75,20 +75,22 @@ export default function Tasks() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedTaskType, setSelectedTaskType] = useState<'vente' | 'troc' | 'other'>('vente');
 
   // Fetch tasks
   const { data: taskList = [], isLoading: tasksLoading } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: ['tasks', selectedDate],
     queryFn: async () => {
-      const data = await tasksApi.getAll();
+      const data = await tasksApi.getAll(selectedDate || undefined);
       return data.map((t: any) => ({
         ...t,
         assignedTo: t.assigned_to,
         assignedToName: t.assigned_to_name || t.assignedToName,
         productId: t.product_id,
         productName: t.product_name,
+        productImei: t.product_imei,
         clientName: t.client_name,
         clientPhone: t.client_phone,
         createdAt: t.created_at || t.createdAt,
@@ -151,7 +153,8 @@ export default function Tasks() {
 
   const filteredTasks = taskList.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.assignedToName?.toLowerCase().includes(searchQuery.toLowerCase());
+      task.assignedToName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.productImei?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -440,6 +443,27 @@ export default function Tasks() {
               className="pl-10"
             />
           </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="pl-10 w-[180px]"
+              />
+            </div>
+            {selectedDate && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedDate('')}
+                className="text-muted-foreground"
+              >
+                Réinitialiser
+              </Button>
+            )}
+          </div>
           <div className="flex gap-2 overflow-x-auto pb-2">
             {statusFilters.map((filter) => (
               <Button
@@ -536,6 +560,11 @@ export default function Tasks() {
                         <Badge variant="secondary">{getTaskTypeLabel(task.type)}</Badge>
                         {task.sellingPrice && (
                           <span className="text-success font-medium">{task.sellingPrice} FCFA</span>
+                        )}
+                        {task.productImei && (
+                          <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded text-xs font-mono">
+                            IMEI: {task.productImei}
+                          </span>
                         )}
                         {task.client && (
                           <span>Client: {task.client}</span>

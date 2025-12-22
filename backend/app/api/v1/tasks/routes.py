@@ -12,24 +12,26 @@ async def create_task(
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    task = await TaskService.create_task(admin_id, task_data)
+    task = await TaskService.create_task(admin_id, task_data, str(current_user.id), current_user.name)
     return await TaskService.get_task_by_id(str(task.id), admin_id)
 
 @router.get("/", response_model=list[TaskResponse])
 async def get_tasks(
     collaborator_id: str = Query(None),
+    date: str = Query(None),
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    return await TaskService.get_tasks(admin_id, collaborator_id)
+    return await TaskService.get_tasks(admin_id, collaborator_id, date_filter=date)
 
 @router.get("/my", response_model=list[TaskResponse])
 async def get_my_tasks(
+    date: str = Query(None),
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
     collaborator_id = str(current_user.id) if current_user.role == "collaborator" else None
-    return await TaskService.get_tasks(admin_id, collaborator_id)
+    return await TaskService.get_tasks(admin_id, collaborator_id, date_filter=date)
 
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(
@@ -46,7 +48,7 @@ async def update_task(
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    return await TaskService.update_task(task_id, admin_id, task_data)
+    return await TaskService.update_task(task_id, admin_id, task_data, str(current_user.id), current_user.name)
 
 @router.patch("/{task_id}/status", response_model=TaskResponse)
 async def update_task_status(
@@ -55,7 +57,7 @@ async def update_task_status(
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    return await TaskService.update_task_status(task_id, admin_id, status)
+    return await TaskService.update_task_status(task_id, admin_id, status, str(current_user.id), current_user.name)
 
 @router.delete("/{task_id}")
 async def delete_task(
@@ -63,5 +65,5 @@ async def delete_task(
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    await TaskService.delete_task(task_id, admin_id)
+    await TaskService.delete_task(task_id, admin_id, str(current_user.id), current_user.name)
     return {"message": "Task deleted successfully"}

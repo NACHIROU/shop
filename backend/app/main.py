@@ -23,7 +23,9 @@ async def startup_event():
     # Test MongoDB connection
     try:
         await client.admin.command('ping')
-        print("Connected to MongoDB")
+        from app.db.mongo import create_indexes
+        await create_indexes()
+        print("Connected to MongoDB and indexes created")
     except Exception as e:
         print(f"Failed to connect to MongoDB: {e}")
 

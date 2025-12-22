@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { statsApi } from '@/services/api';
 import { formatCurrency } from '@/lib/utils';
-import { Calendar, Download, Mail, Filter, TrendingUp, TrendingDown, Wallet, Receipt, Loader2 } from 'lucide-react';
+import { Calendar, Download, Mail, Filter, TrendingUp, TrendingDown, Wallet, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { usePrivacy } from '@/contexts/PrivacyContext';
@@ -173,17 +173,10 @@ const Reports = () => {
                             </Card>
                         </div>
 
-                        {/* Detailed Breakdown */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Summary Badges */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <Card className="border-border/50">
-                                <CardHeader>
-                                    <CardTitle className="text-lg flex items-center gap-2">
-                                        <TrendingUp className="w-5 h-5 text-success" />
-                                        Entrées d'argent
-                                    </CardTitle>
-                                    <CardDescription>Ventes effectuées sur la période</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
+                                <CardContent className="pt-6 space-y-4">
                                     <div className="flex justify-between items-center p-3 rounded-lg bg-success/5 border border-success/10">
                                         <div>
                                             <p className="text-sm font-medium opacity-70">Total Ventes</p>
@@ -197,14 +190,7 @@ const Reports = () => {
                             </Card>
 
                             <Card className="border-border/50">
-                                <CardHeader>
-                                    <CardTitle className="text-lg flex items-center gap-2">
-                                        <TrendingDown className="w-5 h-5 text-destructive" />
-                                        Sorties d'argent
-                                    </CardTitle>
-                                    <CardDescription>Achats de stock et dépenses</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
+                                <CardContent className="pt-6 space-y-4">
                                     <div className="flex justify-between items-center p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
                                         <div>
                                             <p className="text-sm font-medium opacity-70">Achats de Stock</p>
@@ -226,6 +212,54 @@ const Reports = () => {
                                 </CardContent>
                             </Card>
                         </div>
+
+                        {/* Sales List Table */}
+                        <Card className="border-border/50">
+                            <CardHeader>
+                                <CardTitle className="text-lg">Détails des Ventes</CardTitle>
+                                <CardDescription>Liste exhaustive des ventes sur la période sélectionnée</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="rounded-md border overflow-hidden">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-muted/50 border-b">
+                                            <tr>
+                                                <th className="px-4 py-3 text-left font-medium">Date</th>
+                                                <th className="px-4 py-3 text-left font-medium">Produit</th>
+                                                <th className="px-4 py-3 text-left font-medium">IMEI</th>
+                                                <th className="px-4 py-3 text-right font-medium">Qte</th>
+                                                <th className="px-4 py-3 text-right font-medium">Montant</th>
+                                                <th className="px-4 py-3 text-right font-medium">Profit</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                            {reportData?.sales?.length > 0 ? (
+                                                reportData.sales.map((sale: any, idx: number) => (
+                                                    <tr key={idx} className="hover:bg-muted/30 transition-colors">
+                                                        <td className="px-4 py-3 whitespace-nowrap">
+                                                            {new Date(sale.date).toLocaleDateString('fr-BJ')}
+                                                        </td>
+                                                        <td className="px-4 py-3 font-medium">{sale.product_name}</td>
+                                                        <td className="px-4 py-3 text-muted-foreground">{sale.product_imei || 'N/A'}</td>
+                                                        <td className="px-4 py-3 text-right">{sale.quantity}</td>
+                                                        <td className="px-4 py-3 text-right">{formatCurrency(sale.amount)}</td>
+                                                        <td className="px-4 py-3 text-right text-emerald-500 font-medium">
+                                                            {formatCurrency(sale.profit)}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                                                        Aucune vente enregistrée sur cette période
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </>
                 ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">

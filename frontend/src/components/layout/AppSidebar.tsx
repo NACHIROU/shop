@@ -9,7 +9,9 @@ import {
   ChevronRight,
   Truck,
   Receipt,
-  BarChart
+  BarChart,
+  Store,
+  ScrollText
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,6 +29,24 @@ const adminNavItems = [
   { title: 'Rapports', url: '/reports', icon: BarChart },
 ];
 
+const superadminNavItems = [
+  {
+    title: "Tableau de Bord",
+    url: "/dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    title: "Gestion Marchands",
+    url: "/merchants",
+    icon: Store,
+  },
+  {
+    title: "Historique (Logs)",
+    url: "/logs",
+    icon: ScrollText,
+  },
+];
+
 const collaboratorNavItems = [
   { title: 'Mon tableau de bord', url: '/', icon: LayoutDashboard },
   { title: 'Produits', url: '/products', icon: Package },
@@ -37,7 +57,7 @@ export function AppSidebar() {
   const { role, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItems = role === 'admin' ? adminNavItems : collaboratorNavItems;
+  const navItems = role === 'superadmin' ? superadminNavItems : (role === 'admin' ? adminNavItems : collaboratorNavItems);
 
   return (
     <aside
@@ -54,8 +74,8 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="animate-fade-in">
-              <h1 className="font-bold text-lg">iPhone Shop</h1>
-              <p className="text-xs text-sidebar-foreground/60">Bénin</p>
+              <h1 className="font-bold text-lg text-primary">EasyManaging</h1>
+              <p className="text-xs text-sidebar-foreground/60">Gestion Intelligente</p>
             </div>
           )}
         </div>

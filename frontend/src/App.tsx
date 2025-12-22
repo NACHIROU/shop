@@ -25,6 +25,9 @@ import Reports from "./pages/admin/Reports";
 import CollaboratorDashboard from "./pages/collaborator/CollaboratorDashboard";
 import CollaboratorTasks from "./pages/collaborator/CollaboratorTasks";
 import CollaboratorProducts from "./pages/collaborator/CollaboratorProducts";
+import MerchantManagement from "./pages/MerchantManagement";
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import AuditLogs from './pages/AuditLogs';
 
 import NotFound from "./pages/NotFound";
 
@@ -47,6 +50,17 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/login" />} />
       ) : (
         <>
+          {/* SuperAdmin Routes */}
+          {user?.role === 'superadmin' && (
+            <>
+              <Route path="/" element={<SuperAdminDashboard />} />
+              <Route path="/dashboard" element={<SuperAdminDashboard />} />
+              <Route path="/merchants" element={<MerchantManagement />} />
+              <Route path="/logs" element={<AuditLogs />} />
+              <Route path="/profile" element={<Profile />} />
+            </>
+          )}
+
           {/* Admin Routes */}
           {role === 'admin' && (
             <>
@@ -81,20 +95,24 @@ function AppRoutes() {
   );
 }
 
+import { ThemeProvider } from "./contexts/ThemeContext";
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <NotificationProvider>
-        <PrivacyProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </TooltipProvider>
-        </PrivacyProvider>
-      </NotificationProvider>
+      <ThemeProvider>
+        <NotificationProvider>
+          <PrivacyProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            </TooltipProvider>
+          </PrivacyProvider>
+        </NotificationProvider>
+      </ThemeProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

@@ -12,7 +12,7 @@ async def create_product(
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    product = await ProductService.create_product(admin_id, product_data)
+    product = await ProductService.create_product(admin_id, product_data, str(current_user.id), current_user.name)
     return await ProductService.get_product_by_id(str(product.id), admin_id)
 
 @router.get("/", response_model=PaginatedProductResponse | PaginatedRestrictedProductResponse)
@@ -46,7 +46,7 @@ async def update_product(
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    return await ProductService.update_product(product_id, admin_id, product_data)
+    return await ProductService.update_product(product_id, admin_id, product_data, str(current_user.id), current_user.name)
 
 @router.delete("/{product_id}")
 async def delete_product(
@@ -54,5 +54,5 @@ async def delete_product(
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    await ProductService.delete_product(product_id, admin_id)
+    await ProductService.delete_product(product_id, admin_id, str(current_user.id), current_user.name)
     return {"message": "Product deleted successfully"}

@@ -10,7 +10,8 @@ from bson import ObjectId
 
 class TaskService:
     @staticmethod
-    async def create_task(admin_id: str, task_data: TaskCreate) -> Task:
+    async def create_task(admin_id: str, task_data: TaskCreate, actor_id: str, actor_name: str) -> Task:
+        from app.services.audit_log_service import AuditLogService
         # Set default date if not provided
         task_date = task_data.date if task_data.date else datetime.utcnow()
         
@@ -112,7 +113,6 @@ class TaskService:
         result = await tasks_collection.insert_one(task.dict(by_alias=True))
         task.id = result.inserted_id
         
-        # Send notification to assigned collaborator
         if task.collaborator_id:
             await NotificationService.create_notification(
                 user_id=task.collaborator_id,
@@ -121,13 +121,33 @@ class TaskService:
                 type="new_task"
             )
             
+        await AuditLogService.log_action(
+            admin_id=admin_id,
+            user_id=actor_id,
+            user_name=actor_name,
+            action="create_task",
+            resource_type="task",
+            resource_id=str(task.id),
+            details=f"Création de la tâche: {task.title}"
+        )
+            
         return task
 
     @staticmethod
-    async def get_tasks(admin_id: str, collaborator_id: str = None) -> List[TaskResponse]:
+    async def get_tasks(admin_id: str, collaborator_id: str = None, date_filter: str = None) -> List[TaskResponse]:
         query = {"admin_id": admin_id}
         if collaborator_id:
             query["collaborator_id"] = collaborator_id
+        
+        if date_filter:
+            try:
+                # Expecting YYYY-MM-DD
+                target_date = datetime.strptime(date_filter, "%Y-%m-%d")
+                start_of_day = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_of_day = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+                query["date"] = {"$gte": start_of_day, "$lte": end_of_day}
+            except ValueError:
+                pass # Ignore invalid date formats
         
         cursor = tasks_collection.find(query).sort("created_at", -1)
         tasks = []
@@ -137,8 +157,9 @@ class TaskService:
             user = await users_collection.find_one({"_id": ObjectId(task.collaborator_id) if ObjectId.is_valid(task.collaborator_id) else task.collaborator_id})
             assigned_name = user["name"] if user else "Unknown"
             
-            # Get product name
+            # Get product info
             product_name = None
+            product_imei = None
             if task.product_id:
                 product = await products_collection.find_one({
                     "_id": ObjectId(task.product_id) if ObjectId.is_valid(task.product_id) else task.product_id,
@@ -146,6 +167,7 @@ class TaskService:
                 })
                 if product:
                     product_name = product["name"]
+                    product_imei = product.get("imei")
             
             tasks.append(TaskResponse(
                 id=str(task.id),
@@ -157,6 +179,7 @@ class TaskService:
                 assigned_to_name=assigned_name,
                 product_id=task.product_id,
                 product_name=product_name,
+                product_imei=product_imei,
                 quantity=task.quantity,
                 client_name=task.client_name,
                 client_phone=task.client_phone,
@@ -222,7 +245,8 @@ class TaskService:
         )
 
     @staticmethod
-    async def update_task(task_id: str, admin_id: str, update_data: TaskUpdate) -> TaskResponse:
+    async def update_task(task_id: str, admin_id: str, update_data: TaskUpdate, actor_id: str, actor_name: str) -> TaskResponse:
+        from app.services.audit_log_service import AuditLogService
         update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
         if "assigned_to" in update_dict:
             update_dict["collaborator_id"] = update_dict.pop("assigned_to")
@@ -238,14 +262,25 @@ class TaskService:
         if old_status == "completed" and update_dict.get("status") != "completed" and update_dict.get("status") is not None:
              await TaskService._rollback_completed_task_operations(task_id, admin_id)
 
-        # If status is updated to completed, handle operations
         if update_dict.get("status") == "completed" and old_status != "completed":
             await TaskService._record_completed_task_operations(task_id, admin_id)
             
+        await AuditLogService.log_action(
+            admin_id=admin_id,
+            user_id=actor_id,
+            user_name=actor_name,
+            action="update_task",
+            resource_type="task",
+            resource_id=task_id,
+            details=f"Mise à jour de la tâche",
+            changes=update_dict
+        )
+
         return await TaskService.get_task_by_id(task_id, admin_id)
 
     @staticmethod
-    async def update_task_status(task_id: str, admin_id: str, status: str) -> TaskResponse:
+    async def update_task_status(task_id: str, admin_id: str, status: str, actor_id: str, actor_name: str) -> TaskResponse:
+        from app.services.audit_log_service import AuditLogService
         task_before = await TaskService.get_task_by_id(task_id, admin_id)
         old_status = task_before.status
 
@@ -265,6 +300,16 @@ class TaskService:
         if status == "cancelled":
             await TaskService._cleanup_task_resources(task_id, admin_id)
             
+        await AuditLogService.log_action(
+            admin_id=admin_id,
+            user_id=actor_id,
+            user_name=actor_name,
+            action="update_task_status",
+            resource_type="task",
+            resource_id=task_id,
+            details=f"Changement de statut: {status}"
+        )
+
         return await TaskService.get_task_by_id(task_id, admin_id)
 
     @staticmethod
@@ -297,14 +342,20 @@ class TaskService:
 
     @staticmethod
     async def _record_completed_task_operations(task_id: str, admin_id: str):
-        task_doc = await tasks_collection.find_one({"_id": ObjectId(task_id) if ObjectId.is_valid(task_id) else task_id})
+        task_doc = await tasks_collection.find_one({
+            "_id": ObjectId(task_id) if ObjectId.is_valid(task_id) else task_id,
+            "admin_id": admin_id
+        })
         if not task_doc:
             return
 
         task = Task(**task_doc)
         
         # Avoid duplicate operations if already recorded
-        existing_op = await operations_collection.find_one({"note": f"Task completion: {task_id}"})
+        existing_op = await operations_collection.find_one({
+            "note": f"Task completion: {task_id}",
+            "admin_id": admin_id
+        })
         if existing_op:
             return
 
@@ -313,7 +364,10 @@ class TaskService:
         if task.type == "vente" and task.product_id:
             # For a normal sale, profit can be calculated if we know the purchase price
             # But the user specifically asked to value operational profits from sales and trocs
-            product = await products_collection.find_one({"_id": ObjectId(task.product_id) if ObjectId.is_valid(task.product_id) else task.product_id})
+            product = await products_collection.find_one({
+                "_id": ObjectId(task.product_id) if ObjectId.is_valid(task.product_id) else task.product_id,
+                "admin_id": admin_id
+            })
             purchase_price = product.get("purchase_price", 0) if product else 0
             sale_profit = (task.selling_price or 0) - purchase_price
             
@@ -332,7 +386,11 @@ class TaskService:
             await operations_collection.insert_one(op.dict(by_alias=True))
             
             # Get collaborator name for archiving
-            collaborator = await users_collection.find_one({"_id": ObjectId(task.collaborator_id) if ObjectId.is_valid(task.collaborator_id) else task.collaborator_id})
+            collaborator = await users_collection.find_one({
+                "_id": ObjectId(task.collaborator_id) if ObjectId.is_valid(task.collaborator_id) else task.collaborator_id
+            })
+            # Note: We don't filter user by admin_id here because collaborators might have a different admin_id (their owner)
+            # but they should be linked. Actually, in this system, collaborators belong to the admin who owns the shop.
             collaborator_name = collaborator["name"] if collaborator else "Unknown"
 
             # 2. Archive the product
@@ -415,7 +473,10 @@ class TaskService:
 
     @staticmethod
     async def _rollback_completed_task_operations(task_id: str, admin_id: str):
-        task_doc = await tasks_collection.find_one({"_id": ObjectId(task_id) if ObjectId.is_valid(task_id) else task_id})
+        task_doc = await tasks_collection.find_one({
+            "_id": ObjectId(task_id) if ObjectId.is_valid(task_id) else task_id,
+            "admin_id": admin_id
+        })
         if not task_doc:
             return
 
@@ -469,7 +530,8 @@ class TaskService:
             )
 
     @staticmethod
-    async def delete_task(task_id: str, admin_id: str):
+    async def delete_task(task_id: str, admin_id: str, actor_id: str, actor_name: str):
+        from app.services.audit_log_service import AuditLogService
         # Perform cleanup before deletion
         await TaskService._cleanup_task_resources(task_id, admin_id)
         
@@ -479,3 +541,13 @@ class TaskService:
         })
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Task not found")
+            
+        await AuditLogService.log_action(
+            admin_id=admin_id,
+            user_id=actor_id,
+            user_name=actor_name,
+            action="delete_task",
+            resource_type="task",
+            resource_id=task_id,
+            details=f"Suppression de la tâche"
+        )

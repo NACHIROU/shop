@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { authApi } from '@/services/api';
 
-export type UserRole = 'admin' | 'collaborator';
+export type UserRole = 'superadmin' | 'admin' | 'collaborator';
 
 interface User {
   id: string;
@@ -10,6 +10,7 @@ interface User {
   phone: string;
   role: UserRole;
   is_active: boolean;
+  must_change_password?: boolean;
   created_at: string;
   avatar?: string;
 }
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phone: response.user.phone,
         role: response.user.role,
         is_active: response.user.is_active,
+        must_change_password: response.user.must_change_password,
         created_at: response.user.created_at,
       };
       setUser(userData);
@@ -79,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phone: response.user.phone,
         role: response.user.role,
         is_active: response.user.is_active,
+        must_change_password: response.user.must_change_password,
         created_at: response.user.created_at,
       };
       setUser(userData);

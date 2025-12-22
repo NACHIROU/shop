@@ -75,6 +75,7 @@ export default function CollaboratorTasks() {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [taskList, setTaskList] = useState<Task[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -85,7 +86,7 @@ export default function CollaboratorTasks() {
     try {
       setIsLoading(true);
       const [tasksData, productsData] = await Promise.all([
-        tasksApi.getMyTasks(),
+        tasksApi.getMyTasks(selectedDate || undefined),
         productsApi.getAll()
       ]);
 
@@ -96,6 +97,7 @@ export default function CollaboratorTasks() {
         assignedToName: t.assigned_to_name || t.assignedToName,
         productId: t.product_id,
         productName: t.product_name,
+        productImei: t.product_imei,
         clientName: t.client_name,
         clientPhone: t.client_phone,
         createdAt: t.created_at || t.createdAt,
@@ -123,10 +125,11 @@ export default function CollaboratorTasks() {
 
   useEffect(() => {
     fetchData();
-  }, [user?.id]);
+  }, [user?.id, selectedDate]);
 
   const filteredTasks = taskList.filter(task => {
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.productImei?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -411,6 +414,17 @@ export default function CollaboratorTasks() {
               className="pl-10"
             />
           </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="pl-10 w-full sm:w-[160px] text-xs md:text-sm"
+              />
+            </div>
+          </div>
           <div className="flex gap-2 overflow-x-auto pb-2">
             {statusFilters.map((filter) => (
               <Button
@@ -502,6 +516,11 @@ export default function CollaboratorTasks() {
                         <Badge variant="secondary" className="text-xs">{getTaskTypeLabel(task.type)}</Badge>
                         {task.sellingPrice && (
                           <span className="text-success font-medium">{task.sellingPrice.toLocaleString()} FCFA</span>
+                        )}
+                        {task.productImei && (
+                          <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded text-xs font-mono">
+                            IMEI: {task.productImei}
+                          </span>
                         )}
                         {task.client && (
                           <span className="hidden sm:inline">Client: {task.client}</span>

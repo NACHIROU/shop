@@ -17,6 +17,12 @@ async def get_current_admin(current_user: TokenData = Depends(get_current_user))
         raise HTTPException(status_code=403, detail="Not an admin")
     return User(**user)
 
+async def get_current_superadmin(current_user: TokenData = Depends(get_current_user)) -> User:
+    user = await users_collection.find_one({"_id": ObjectId(current_user.user_id), "role": "superadmin", "is_active": True})
+    if user is None:
+        raise HTTPException(status_code=403, detail="Not a superadmin")
+    return User(**user)
+
 async def get_current_admin_or_collaborator(current_user: TokenData = Depends(get_current_user)) -> User:
     user = await users_collection.find_one({"_id": ObjectId(current_user.user_id), "is_active": True})
     if user is None:

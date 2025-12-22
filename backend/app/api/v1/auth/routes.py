@@ -5,7 +5,7 @@ from app.schemas.auth import (
     ActivateAccountRequest, CollaboratorUpdate
 )
 from app.services.auth_service import AuthService
-from app.core.dependencies import get_current_admin, get_current_admin_or_collaborator
+from app.core.dependencies import get_current_admin, get_current_admin_or_collaborator, get_current_superadmin
 from app.models.user import User
 
 router = APIRouter()
@@ -126,3 +126,49 @@ async def change_password(
 ):
     await AuthService.change_password(str(current_user.id), new_password)
     return {"message": "Password changed successfully"}
+@router.post("/merchants", response_model=UserResponse)
+async def create_merchant(
+    merchant_data: UserCreate,
+    current_superadmin: User = Depends(get_current_superadmin)
+):
+    user = await AuthService.create_merchant(merchant_data)
+    return UserResponse(
+        id=str(user.id),
+        name=user.name,
+        email=user.email,
+        phone=user.phone,
+        role=user.role,
+        is_active=user.is_active,
+        created_at=user.created_at.isoformat()
+    )
+
+@router.get("/merchants", response_model=list[UserResponse])
+async def get_merchants(current_superadmin: User = Depends(get_current_superadmin)):
+    merchants = await AuthService.get_all_merchants()
+    return [
+        UserResponse(
+            id=str(m.id),
+            name=m.name,
+            email=m.email,
+            phone=m.phone,
+            role=m.role,
+            is_active=m.is_active,
+            created_at=m.created_at.isoformat()
+        ) for m in merchants
+    ]
+
+@router.post("/users/{user_id}/toggle-status")
+async def toggle_user_status(
+    user_id: str,
+    current_superadmin: User = Depends(get_current_superadmin)
+):
+    new_status = await AuthService.toggle_user_active_status(user_id)
+    return {"message": "Status updated", "is_active": new_status}
+
+@router.post("/users/{user_id}/reset-password")
+async def reset_password(
+    user_id: str,
+    current_superadmin: User = Depends(get_current_superadmin)
+):
+    await AuthService.reset_user_password(user_id)
+    return {"message": "Password reset requested. User must change password at next login."}

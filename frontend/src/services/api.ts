@@ -95,6 +95,21 @@ export const authApi = {
     apiFetch(`/auth/collaborators/${id}`, {
       method: 'DELETE',
     }),
+  getMerchants: () =>
+    apiFetch<any[]>('/auth/merchants'),
+  createMerchant: (data: { name: string; email: string; phone: string }) =>
+    apiFetch<any>('/auth/merchants', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  toggleUserStatus: (id: string) =>
+    apiFetch<{ message: string; is_active: boolean }>(`/auth/users/${id}/toggle-status`, {
+      method: 'POST',
+    }),
+  resetUserPassword: (id: string) =>
+    apiFetch<{ message: string }>(`/auth/users/${id}/reset-password`, {
+      method: 'POST',
+    }),
 };
 // ============= Suppliers API =============
 export const suppliersApi = {
@@ -139,11 +154,19 @@ export const collaboratorsApi = {
 
 // ============= Tasks API =============
 export const tasksApi = {
-  getAll: (): Promise<Task[]> => apiFetch('/tasks/'),
+  getAll: (date?: string): Promise<Task[]> => {
+    let url = '/tasks/';
+    if (date) url += `?date=${date}`;
+    return apiFetch(url);
+  },
   getById: (id: string): Promise<Task> => apiFetch(`/tasks/${id}`),
   getByCollaborator: (collaboratorId: string): Promise<Task[]> =>
     apiFetch(`/tasks/?collaborator_id=${collaboratorId}`),
-  getMyTasks: (): Promise<Task[]> => apiFetch('/tasks/my'),
+  getMyTasks: (date?: string): Promise<Task[]> => {
+    let url = '/tasks/my';
+    if (date) url += `?date=${date}`;
+    return apiFetch(url);
+  },
   create: (data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> =>
     apiFetch('/tasks/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Task>): Promise<Task> =>
@@ -176,10 +199,23 @@ export const expensesApi = {
 
 // ============= Stats API =============
 export const statsApi = {
-  getDaily: (): Promise<DailyOverview> => apiFetch('/analytics/daily'),
-  getMonthly: (): Promise<MonthlyStats> => apiFetch('/analytics/monthly'),
-  getWeekly: (): Promise<DailyStats[]> => apiFetch('/analytics/weekly'),
+  getDaily: () =>
+    apiFetch<any>('/analytics/daily'),
+  getDailyOverview: () =>
+    apiFetch<any>('/analytics/daily'),
+  getMonthly: () =>
+    apiFetch<any>('/analytics/monthly'),
+  getMonthlyStats: () =>
+    apiFetch<any>('/analytics/monthly'),
+  getWeekly: () =>
+    apiFetch<any[]>('/analytics/weekly'),
+  getWeeklyStats: () =>
+    apiFetch<any[]>('/analytics/weekly'),
+  getGlobalStats: () =>
+    apiFetch<any>('/analytics/global'),
   getReport: (startDate: string, endDate: string): Promise<any> =>
+    apiFetch(`/analytics/report?start_date=${startDate}&end_date=${endDate}`),
+  getTreasuryReport: (startDate: string, endDate: string): Promise<any> =>
     apiFetch(`/analytics/report?start_date=${startDate}&end_date=${endDate}`),
   emailReport: (email: string, startDate: string, endDate: string): Promise<{ success: boolean }> =>
     apiFetch('/analytics/report/email', {
@@ -195,6 +231,16 @@ export const notificationsApi = {
   getAll: (): Promise<any[]> => apiFetch('/notifications/'),
   markAsRead: (id: string) => apiFetch(`/notifications/${id}/read`, { method: 'POST' }),
   markAllAsRead: () => apiFetch('/notifications/read-all', { method: 'POST' }),
+};
+
+// ============= Audit Logs API =============
+export const auditLogsApi = {
+  getAll: (merchantId?: string, page = 1, size = 100): Promise<any[]> => {
+    const skip = (page - 1) * size;
+    let url = `/audit-logs/?limit=${size}&skip=${skip}`;
+    if (merchantId) url += `&merchant_id=${merchantId}`;
+    return apiFetch(url);
+  }
 };
 
 // ============= Utility Functions =============

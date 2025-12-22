@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 class DailyStats(BaseModel):
     date: str
@@ -9,11 +9,14 @@ class DailyStats(BaseModel):
     tasks: int
     expenses: float
 
+    class Config:
+        populate_by_name = True
+
 class MonthlyStats(BaseModel):
     total_sales: float
     total_purchases: float = 0
     global_balance: float = 0
-    total_profit: float  # This will represent operational profit
+    total_profit: float
     total_expenses: float
     net_profit: float
     total_tasks: int
@@ -22,13 +25,54 @@ class MonthlyStats(BaseModel):
     cancelled_tasks: int
     total_value: float = 0
 
+    class Config:
+        populate_by_name = True
+        alias_generator = lambda s: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(s.split('_')))
+
 class DailyOverview(BaseModel):
     sales: float
     purchases: float = 0
     global_balance: float = 0
-    profit: float  # This will represent operational profit
+    profit: float
     expenses: float
     net_profit: float
     new_tasks: int
     completed_tasks: int
     total_value: float = 0
+
+    class Config:
+        populate_by_name = True
+        alias_generator = lambda s: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(s.split('_')))
+
+class MerchantStats(BaseModel):
+    id: str
+    name: str
+    email: str
+    total_sales: float
+    active_tasks: int
+    last_active: Optional[str] = None
+
+    class Config:
+        populate_by_name = True
+        alias_generator = lambda s: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(s.split('_')))
+
+class GrowthData(BaseModel):
+    date: str
+    merchant_count: int
+    volume: float
+
+    class Config:
+        populate_by_name = True
+        alias_generator = lambda s: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(s.split('_')))
+
+class GlobalStats(BaseModel):
+    total_merchants: int
+    active_merchants_30d: int
+    total_volume_all_time: float
+    total_profit_all_time: float
+    growth: List[GrowthData]
+    top_merchants: List[MerchantStats]
+
+    class Config:
+        populate_by_name = True
+        alias_generator = lambda s: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(s.split('_')))

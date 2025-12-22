@@ -8,9 +8,13 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { User, Mail, Phone, Lock, Save } from 'lucide-react';
 import { PageLoader } from '@/components/ui/loader';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Palette, Sun, Moon, Leaf, Check } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function Profile() {
     const { user } = useAuth();
+    const { theme, setTheme } = useTheme();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         name: user?.name || '',
@@ -206,6 +210,82 @@ export default function Profile() {
                                 </Button>
                             </div>
                         </form>
+                    </CardContent>
+                </Card>
+
+                {/* Theme Selection */}
+                <Card className="animate-fade-in border-none shadow-premium overflow-hidden">
+                    <CardHeader className="bg-primary/5">
+                        <CardTitle className="flex items-center gap-2">
+                            <Palette className="w-5 h-5 text-primary" />
+                            Personnalisation du thème
+                        </CardTitle>
+                        <CardDescription>
+                            Choisissez l'ambiance visuelle qui vous convient le mieux
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {/* Default Theme */}
+                            <button
+                                onClick={() => setTheme('default')}
+                                className={cn(
+                                    "relative flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300",
+                                    theme === 'default'
+                                        ? "border-primary bg-primary/10 shadow-glow scale-105"
+                                        : "border-muted hover:border-primary/50 bg-card"
+                                )}
+                            >
+                                <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center text-white">
+                                    <Sun className="w-6 h-6" />
+                                </div>
+                                <div className="text-center">
+                                    <span className="font-bold block">Vibrant</span>
+                                    <span className="text-xs text-muted-foreground italic">Défaut</span>
+                                </div>
+                                {theme === 'default' && <Check className="absolute top-2 right-2 w-4 h-4 text-primary" />}
+                            </button>
+
+                            {/* Dark Theme */}
+                            <button
+                                onClick={() => setTheme('dark')}
+                                className={cn(
+                                    "relative flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300",
+                                    theme === 'dark'
+                                        ? "border-primary bg-primary/10 shadow-glow scale-105"
+                                        : "border-muted hover:border-primary/50 bg-card"
+                                )}
+                            >
+                                <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-white">
+                                    <Moon className="w-6 h-6" />
+                                </div>
+                                <div className="text-center">
+                                    <span className="font-bold block">Sombre</span>
+                                    <span className="text-xs text-muted-foreground italic">Sleek Dark</span>
+                                </div>
+                                {theme === 'dark' && <Check className="absolute top-2 right-2 w-4 h-4 text-primary" />}
+                            </button>
+
+                            {/* Natural Theme */}
+                            <button
+                                onClick={() => setTheme('natural')}
+                                className={cn(
+                                    "relative flex flex-col items-center gap-3 p-4 rounded-xl border-2 transition-all duration-300",
+                                    theme === 'natural'
+                                        ? "border-primary bg-primary/10 shadow-glow scale-105"
+                                        : "border-muted hover:border-primary/50 bg-card"
+                                )}
+                            >
+                                <div className="w-12 h-12 rounded-full bg-[#4a3728] flex items-center justify-center text-white">
+                                    <Leaf className="w-6 h-6" />
+                                </div>
+                                <div className="text-center">
+                                    <span className="font-bold block">Naturel</span>
+                                    <span className="text-xs text-muted-foreground italic">Beige & Marron</span>
+                                </div>
+                                {theme === 'natural' && <Check className="absolute top-2 right-2 w-4 h-4 text-primary" />}
+                            </button>
+                        </div>
                     </CardContent>
                 </Card>
 
