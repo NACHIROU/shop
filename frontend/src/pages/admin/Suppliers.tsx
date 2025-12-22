@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { PageLoader } from '@/components/ui/loader';
@@ -27,35 +27,53 @@ import { Plus, Search, Edit2, Trash2, Phone, Mail, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Supplier, SupplierInput } from '@/types';
 import { formatDate, suppliersApi } from '@/services/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function Suppliers() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [supplierList, setSupplierList] = useState<Supplier[]>([]);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
-  const fetchSuppliers = async () => {
-    try {
-      setIsLoading(true);
+  const { data: supplierList = [], isLoading } = useQuery({
+    queryKey: ['suppliers'],
+    queryFn: async () => {
       const data = await suppliersApi.getAll();
-      // Handle potential field mismatch if backend returns created_at
-      const mappedData = data.map((item: any) => ({
+      return data.map((item: any) => ({
         ...item,
         createdAt: item.createdAt || item.created_at || new Date().toISOString(),
       }));
-      setSupplierList(mappedData);
-    } catch (error) {
-      console.error('Failed to fetch suppliers:', error);
-      toast.error('Erreur lors du chargement des fournisseurs');
-    } finally {
-      setIsLoading(false);
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchSuppliers();
-  }, []);
+  const addSupplierMutation = useMutation({
+    mutationFn: (payload: SupplierInput) => suppliersApi.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      toast.success('Fournisseur ajouté avec succès');
+      setIsAddDialogOpen(false);
+    },
+    onError: () => toast.error("Erreur lors de l'ajout du fournisseur")
+  });
+
+  const updateSupplierMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Partial<Supplier> }) => suppliersApi.update(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      toast.success('Fournisseur modifié avec succès');
+      setEditingSupplier(null);
+    },
+    onError: () => toast.error("Erreur lors de la modification du fournisseur")
+  });
+
+  const deleteSupplierMutation = useMutation({
+    mutationFn: (id: string) => suppliersApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+      toast.success('Fournisseur supprimé');
+    },
+    onError: () => toast.error("Erreur lors de la suppression du fournisseur")
+  });
 
   const filteredSuppliers = supplierList.filter(supplier =>
     supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -64,9 +82,7 @@ export default function Suppliers() {
 
   const handleAddSupplier = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     const formData = new FormData(e.currentTarget);
-
     const payload: SupplierInput = {
       name: formData.get('name') as string,
       phone: formData.get('phone') as string,
@@ -74,23 +90,12 @@ export default function Suppliers() {
       address: (formData.get('address') as string) || undefined,
       notes: (formData.get('notes') as string) || undefined,
     };
-
-    try {
-      await suppliersApi.create(payload);
-      toast.success('Fournisseur ajouté avec succès');
-      setIsAddDialogOpen(false);
-      fetchSuppliers();
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de l'ajout du fournisseur");
-    }
+    addSupplierMutation.mutate(payload);
   };
-
 
   const handleEditSupplier = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingSupplier) return;
-
     const formData = new FormData(e.currentTarget);
     const payload: Partial<Supplier> = {
       name: formData.get('name') as string,
@@ -99,29 +104,12 @@ export default function Suppliers() {
       address: formData.get('address') as string || undefined,
       notes: formData.get('notes') as string || undefined,
     };
-
-    try {
-      await suppliersApi.update(editingSupplier.id, payload);
-      toast.success('Fournisseur modifié avec succès');
-      setEditingSupplier(null);
-      fetchSuppliers();
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la modification du fournisseur");
-    }
+    updateSupplierMutation.mutate({ id: editingSupplier.id, payload });
   };
 
   const handleDeleteSupplier = async (id: string) => {
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce fournisseur ?')) return;
-
-    try {
-      await suppliersApi.delete(id);
-      toast.success('Fournisseur supprimé');
-      fetchSuppliers();
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression du fournisseur");
-    }
+    deleteSupplierMutation.mutate(id);
   };
 
   const SupplierForm = ({ supplier, onSubmit }: { supplier?: Supplier; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void }) => (

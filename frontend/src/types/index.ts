@@ -27,6 +27,11 @@ export interface Product {
   category: string;
   supplierId?: string;
   supplierName?: string;
+  isArchived?: boolean;
+  sellingPrice?: number;
+  clientName?: string;
+  soldBy?: string;
+  soldAt?: string;
   createdAt: string;
 }
 

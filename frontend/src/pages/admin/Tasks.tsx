@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   getStatusLabel,
@@ -51,6 +51,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const typeIcons = {
   vente: Package,
@@ -71,26 +72,18 @@ const statusFilters: { label: string; value: TaskStatus | 'all' }[] = [
 ];
 
 export default function Tasks() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [taskList, setTaskList] = useState<Task[]>([]);
-  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [selectedTaskType, setSelectedTaskType] = useState<'vente' | 'troc' | 'other'>('vente');
 
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
-      const [tasksData, collaboratorsData, productsData] = await Promise.all([
-        tasksApi.getAll(),
-        authApi.getCollaborators(),
-        productsApi.getAll()
-      ]);
-
-      // Map backend snake_case to frontend camelCase
-      const mappedTasks = tasksData.map((t: any) => ({
+  // Fetch tasks
+  const { data: taskList = [], isLoading: tasksLoading } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => {
+      const data = await tasksApi.getAll();
+      return data.map((t: any) => ({
         ...t,
         assignedTo: t.assigned_to,
         assignedToName: t.assigned_to_name || t.assignedToName,
@@ -109,21 +102,52 @@ export default function Tasks() {
         incomingProductCategory: t.incoming_product_category,
         recoveredFrom: t.recovered_from,
       }));
-
-      setTaskList(mappedTasks);
-      setCollaborators(collaboratorsData);
-      setProducts(productsData.items);
-    } catch (error) {
-      console.error(error);
-      toast.error('Erreur lors du chargement des données');
-    } finally {
-      setIsLoading(false);
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // Fetch collaborators
+  const { data: collaborators = [], isLoading: collaboratorsLoading } = useQuery({
+    queryKey: ['collaborators'],
+    queryFn: () => authApi.getCollaborators(),
+  });
+
+  // Fetch products
+  const { data: productsData, isLoading: productsLoading } = useQuery({
+    queryKey: ['products', 1, '', 'all'], // Reuse generic product fetch key
+    queryFn: () => productsApi.getAll(1, 100),
+  });
+
+  const products = productsData?.items || [];
+  const isLoading = tasksLoading || collaboratorsLoading || productsLoading;
+
+  const addTaskMutation = useMutation({
+    mutationFn: (payload: any) => tasksApi.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] }); // Stock might have changed
+      toast.success('Tâche créée avec succès');
+      setIsAddDialogOpen(false);
+    },
+    onError: () => toast.error("Erreur lors de la création de la tâche")
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: TaskStatus }) => tasksApi.updateStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Statut mis à jour');
+    },
+    onError: () => toast.error("Erreur lors de la mise à jour du statut")
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: (id: string) => tasksApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Tâche supprimée');
+    },
+    onError: () => toast.error("Erreur lors de la suppression")
+  });
 
   const filteredTasks = taskList.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -144,14 +168,12 @@ export default function Tasks() {
       date: formData.get('date') as string,
     };
 
-    // Vente
     if (selectedTaskType === 'vente') {
       payload.product_id = formData.get('product') as string;
       payload.selling_price = Number(formData.get('sellingPrice'));
       payload.client = formData.get('client') as string || undefined;
     }
 
-    // Troc
     if (selectedTaskType === 'troc') {
       payload.outgoing_product_id = formData.get('outgoingProduct') as string;
       payload.outgoing_product_price = Number(formData.get('outgoingPrice'));
@@ -162,38 +184,16 @@ export default function Tasks() {
       payload.recovered_from = formData.get('recoveredFrom') as string;
     }
 
-    try {
-      await tasksApi.create(payload as any);
-      toast.success('Tâche créée avec succès');
-      setIsAddDialogOpen(false);
-      fetchData();
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la création de la tâche");
-    }
+    addTaskMutation.mutate(payload);
   };
 
   const handleUpdateStatus = async (taskId: string, newStatus: TaskStatus) => {
-    try {
-      await tasksApi.updateStatus(taskId, newStatus);
-      toast.success('Statut mis à jour');
-      fetchData();
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la mise à jour du statut");
-    }
+    updateStatusMutation.mutate({ id: taskId, status: newStatus });
   };
 
   const handleDeleteTask = async (taskId: string) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche ?")) return;
-    try {
-      await tasksApi.delete(taskId);
-      toast.success('Tâche supprimée');
-      fetchData();
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression");
-    }
+    deleteTaskMutation.mutate(taskId);
   };
 
   const statusCounts = {
@@ -503,8 +503,14 @@ export default function Tasks() {
                               <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'in_progress')}>
                                 Marquer en cours
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'in_delivery')}>
+                                Marquer en livraison
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'completed')}>
                                 Marquer terminée
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'cancelled')}>
+                                Marquer annulée
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive"

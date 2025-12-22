@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,22 +24,22 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PageLoader } from '@/components/ui/loader';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function Collaborators() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
-  const [loading, setLoading] = useState(true);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editingCollaborator, setEditingCollaborator] = useState<Collaborator | null>(null);
 
-  const fetchCollaborators = async () => {
-    try {
-      setLoading(true);
+  const { data: collaborators = [], isLoading: loading } = useQuery({
+    queryKey: ['collaborators'],
+    queryFn: async () => {
       const data = await authApi.getCollaborators();
-      const mappedData = data.map((c: any) => ({
+      return data.map((c: any) => ({
         ...c,
         role: c.role || 'collaborator',
         joinedAt: c.joined_at || c.joinedAt,
@@ -47,40 +47,16 @@ export default function Collaborators() {
         tasksInProgress: c.tasks_in_progress || c.tasksInProgress || 0,
         isActive: c.is_active !== undefined ? c.is_active : true
       }));
-      setCollaborators(mappedData);
-    } catch (error) {
-      console.error(error);
-      toast.error('Erreur lors du chargement des collaborateurs');
-    } finally {
-      setLoading(false);
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchCollaborators();
-  }, []);
-
-  const filteredCollaborators = collaborators.filter(collab =>
-    collab.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    collab.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleAddCollaborator = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-
-    try {
-      const response = await authApi.createCollaborator({
-        name: formData.get('name') as string,
-        email: formData.get('email') as string,
-        phone: formData.get('phone') as string,
-        role: 'collaborator',
-      });
-
+  const addCollaboratorMutation = useMutation({
+    mutationFn: (data: any) => authApi.createCollaborator(data),
+    onSuccess: async (response) => {
+      queryClient.invalidateQueries({ queryKey: ['collaborators'] });
       toast.success('Collaborateur créé avec succès');
       setIsAddDialogOpen(false);
 
-      // Toujours générer le lien d'invitation
       try {
         const inviteData = await authApi.generateInviteLink(response.id);
         setInviteLink(inviteData.invite_url);
@@ -89,49 +65,69 @@ export default function Collaborators() {
         console.error('Erreur génération lien:', error);
         toast.error('Collaborateur créé mais erreur lors de la génération du lien');
       }
-
-      fetchCollaborators();
-    } catch (error: any) {
-      console.error(error);
+    },
+    onError: (error: any) => {
       const message = error.message.includes('API Error')
         ? error.message.split(' - ')[1]
         : "Erreur lors de l'ajout du collaborateur";
       toast.error(message);
     }
+  });
+
+  const updateCollaboratorMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Collaborator> }) => authApi.updateCollaborator(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['collaborators'] });
+      toast.success('Collaborateur modifié avec succès');
+      setEditingCollaborator(null);
+    },
+    onError: () => toast.error("Erreur lors de la modification du collaborateur")
+  });
+
+  const deleteCollaboratorMutation = useMutation({
+    mutationFn: (id: string) => authApi.deleteCollaborator(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['collaborators'] });
+      toast.success('Collaborateur supprimé avec succès');
+    },
+    onError: () => toast.error('Erreur lors de la suppression')
+  });
+
+  const filteredCollaborators = collaborators
+    .filter(collab =>
+      collab.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      collab.email.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => (b.tasksCompleted || 0) - (a.tasksCompleted || 0));
+
+  const handleAddCollaborator = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    addCollaboratorMutation.mutate({
+      name: formData.get('name') as string,
+      email: formData.get('email') as string,
+      phone: formData.get('phone') as string,
+      role: 'collaborator',
+    });
   };
 
   const handleEditCollaborator = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingCollaborator) return;
     const formData = new FormData(e.currentTarget);
-
-    try {
-      await authApi.updateCollaborator(editingCollaborator.id, {
+    updateCollaboratorMutation.mutate({
+      id: editingCollaborator.id,
+      data: {
         name: formData.get('name') as string,
         email: formData.get('email') as string,
         phone: formData.get('phone') as string,
-      });
-
-      toast.success('Collaborateur modifié avec succès');
-      setEditingCollaborator(null);
-      fetchCollaborators();
-    } catch (error: any) {
-      console.error(error);
-      toast.error("Erreur lors de la modification du collaborateur");
-    }
+      }
+    });
   };
 
   const handleDeleteCollaborator = async (id: string) => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer ce collaborateur ?')) return;
-
-    try {
-      await authApi.deleteCollaborator(id);
-      toast.success('Collaborateur supprimé avec succès');
-      fetchCollaborators();
-    } catch (error) {
-      console.error(error);
-      toast.error('Erreur lors de la suppression');
-    }
+    deleteCollaboratorMutation.mutate(id);
   };
 
   const copyInviteLink = () => {

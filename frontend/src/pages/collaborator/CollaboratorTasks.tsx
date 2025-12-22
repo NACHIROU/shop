@@ -68,6 +68,7 @@ const statusFilters: { label: string; value: TaskStatus | 'all' }[] = [
   { label: 'En cours', value: 'in_progress' },
   { label: 'En livraison', value: 'in_delivery' },
   { label: 'Terminées', value: 'completed' },
+  { label: 'Annulées', value: 'cancelled' },
 ];
 
 export default function CollaboratorTasks() {
@@ -84,7 +85,7 @@ export default function CollaboratorTasks() {
     try {
       setIsLoading(true);
       const [tasksData, productsData] = await Promise.all([
-        tasksApi.getAll(),
+        tasksApi.getMyTasks(),
         productsApi.getAll()
       ]);
 
@@ -109,8 +110,8 @@ export default function CollaboratorTasks() {
         recoveredFrom: t.recovered_from,
       }));
 
-      // Filter tasks for current collaborator
-      setTaskList(mappedTasks.filter((t: Task) => t.assignedTo === user?.id));
+      // No need to filter as getMyTasks only returns current user's tasks
+      setTaskList(mappedTasks);
       setProducts(productsData.items);
     } catch (error) {
       console.error(error);
@@ -186,6 +187,7 @@ export default function CollaboratorTasks() {
     in_progress: taskList.filter(t => t.status === 'in_progress').length,
     in_delivery: taskList.filter(t => t.status === 'in_delivery').length,
     completed: taskList.filter(t => t.status === 'completed').length,
+    cancelled: taskList.filter(t => t.status === 'cancelled').length,
   };
 
   return (
@@ -378,7 +380,7 @@ export default function CollaboratorTasks() {
         </div>
 
         {/* Stats - Mobile optimized */}
-        <div className="grid grid-cols-3 gap-2 md:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
           <div className="bg-info/10 p-3 md:p-4 rounded-xl border border-info/20">
             <p className="text-xs md:text-sm text-info">En cours</p>
             <p className="text-xl md:text-2xl font-bold">{statusCounts.in_progress}</p>
@@ -390,6 +392,10 @@ export default function CollaboratorTasks() {
           <div className="bg-success/10 p-3 md:p-4 rounded-xl border border-success/20">
             <p className="text-xs md:text-sm text-success">Terminées</p>
             <p className="text-xl md:text-2xl font-bold">{statusCounts.completed}</p>
+          </div>
+          <div className="bg-destructive/10 p-3 md:p-4 rounded-xl border border-destructive/20">
+            <p className="text-xs md:text-sm text-destructive">Annulées</p>
+            <p className="text-xl md:text-2xl font-bold">{statusCounts.cancelled}</p>
           </div>
         </div>
 
@@ -460,7 +466,9 @@ export default function CollaboratorTasks() {
                           <Badge className={cn("text-xs whitespace-nowrap", getStatusColor(task.status))}>
                             <span className="hidden sm:inline">{getStatusLabel(task.status)}</span>
                             <span className="sm:hidden">
-                              {task.status === 'completed' ? '✓' : task.status === 'in_progress' ? '⏳' : '🚚'}
+                              {task.status === 'completed' ? '✓' :
+                                task.status === 'in_progress' ? '⏳' :
+                                  task.status === 'in_delivery' ? '🚚' : '✕'}
                             </span>
                           </Badge>
                           <DropdownMenu>
@@ -473,8 +481,14 @@ export default function CollaboratorTasks() {
                               <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'in_progress')}>
                                 Marquer en cours
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'in_delivery')}>
+                                Marquer en livraison
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'completed')}>
                                 Marquer terminée
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(task.id, 'cancelled')}>
+                                Marquer annulée
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

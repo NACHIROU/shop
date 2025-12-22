@@ -30,6 +30,12 @@ class Product(BaseModel):
     category: str = "Autres"  # "iPhone", "Samsung", "Autres"
     stock: int = 0
     supplier_id: Optional[str] = None
+    # Archiving fields
+    is_archived: bool = False
+    selling_price: Optional[float] = None
+    client_name: Optional[str] = None
+    sold_by: Optional[str] = None # collaborator name
+    sold_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

@@ -21,7 +21,7 @@ import type {
 const API_BASE_URL = '/api';
 
 // Generic fetch wrapper with auth
-async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+async function apiFetch<T>(endpoint: string, options?: RequestInit, returnBlob: boolean = false): Promise<T> {
   const token = localStorage.getItem('access_token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -40,6 +40,10 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
   if (!response.ok) {
     const error = await response.text();
     throw new Error(`API Error: ${response.status} - ${error}`);
+  }
+
+  if (returnBlob) {
+    return response.blob() as any;
   }
 
   return response.json();
@@ -106,8 +110,8 @@ export const suppliersApi = {
 
 // ============= Products API =============
 export const productsApi = {
-  getAll: (page: number = 1, limit: number = 50, search?: string, category?: string): Promise<PaginatedResponse<Product>> => {
-    let url = `/products/?page=${page}&size=${limit}`;
+  getAll: (page: number = 1, limit: number = 50, search?: string, category?: string, isArchived: boolean = false): Promise<PaginatedResponse<Product>> => {
+    let url = `/products/?page=${page}&size=${limit}&is_archived=${isArchived}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (category && category !== 'all') url += `&category=${encodeURIComponent(category)}`;
     return apiFetch(url);
@@ -138,7 +142,8 @@ export const tasksApi = {
   getAll: (): Promise<Task[]> => apiFetch('/tasks/'),
   getById: (id: string): Promise<Task> => apiFetch(`/tasks/${id}`),
   getByCollaborator: (collaboratorId: string): Promise<Task[]> =>
-    apiFetch(`/tasks/?collaboratorId=${collaboratorId}`),
+    apiFetch(`/tasks/?collaborator_id=${collaboratorId}`),
+  getMyTasks: (): Promise<Task[]> => apiFetch('/tasks/my'),
   create: (data: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> =>
     apiFetch('/tasks/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: string, data: Partial<Task>): Promise<Task> =>
@@ -171,9 +176,18 @@ export const expensesApi = {
 
 // ============= Stats API =============
 export const statsApi = {
-  getDaily: (): Promise<DailyOverview> => apiFetch('/stats/daily'),
-  getMonthly: (): Promise<MonthlyStats> => apiFetch('/stats/monthly'),
-  getWeekly: (): Promise<DailyStats[]> => apiFetch('/stats/weekly'),
+  getDaily: (): Promise<DailyOverview> => apiFetch('/analytics/daily'),
+  getMonthly: (): Promise<MonthlyStats> => apiFetch('/analytics/monthly'),
+  getWeekly: (): Promise<DailyStats[]> => apiFetch('/analytics/weekly'),
+  getReport: (startDate: string, endDate: string): Promise<any> =>
+    apiFetch(`/analytics/report?start_date=${startDate}&end_date=${endDate}`),
+  emailReport: (email: string, startDate: string, endDate: string): Promise<{ success: boolean }> =>
+    apiFetch('/analytics/report/email', {
+      method: 'POST',
+      body: JSON.stringify({ email, start_date: startDate, end_date: endDate })
+    }),
+  getReportPdf: (startDate: string, endDate: string): Promise<Blob> =>
+    apiFetch(`/analytics/report/pdf?start_date=${startDate}&end_date=${endDate}`, {}, true),
 };
 
 // ============= Notifications API =============

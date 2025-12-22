@@ -8,7 +8,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Truck,
-  Receipt
+  Receipt,
+  BarChart
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,10 +24,12 @@ const adminNavItems = [
   { title: 'Collaborateurs', url: '/collaborators', icon: Users },
   { title: 'Tâches', url: '/tasks', icon: ClipboardList },
   { title: 'Dépenses', url: '/expenses', icon: Receipt },
+  { title: 'Rapports', url: '/reports', icon: BarChart },
 ];
 
 const collaboratorNavItems = [
   { title: 'Mon tableau de bord', url: '/', icon: LayoutDashboard },
+  { title: 'Produits', url: '/products', icon: Package },
   { title: 'Mes tâches', url: '/tasks', icon: ClipboardList },
 ];
 

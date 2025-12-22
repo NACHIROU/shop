@@ -14,5 +14,5 @@ api_router.include_router(products_router, prefix="/products", tags=["products"]
 api_router.include_router(suppliers_router, prefix="/suppliers", tags=["suppliers"])
 api_router.include_router(tasks_router, prefix="/tasks", tags=["tasks"])
 api_router.include_router(expenses_router, prefix="/expenses", tags=["expenses"])
-api_router.include_router(analytics_router, prefix="/stats", tags=["analytics"])
+api_router.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])

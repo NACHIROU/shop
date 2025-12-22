@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import { PrivacyProvider } from "@/contexts/PrivacyContext";
 
 // Pages
 import Login from "./pages/Login";
@@ -18,10 +19,12 @@ import Suppliers from "./pages/admin/Suppliers";
 import Collaborators from "./pages/admin/Collaborators";
 import Tasks from "./pages/admin/Tasks";
 import Expenses from "./pages/admin/Expenses";
+import Reports from "./pages/admin/Reports";
 
 // Collaborator Pages
 import CollaboratorDashboard from "./pages/collaborator/CollaboratorDashboard";
 import CollaboratorTasks from "./pages/collaborator/CollaboratorTasks";
+import CollaboratorProducts from "./pages/collaborator/CollaboratorProducts";
 
 import NotFound from "./pages/NotFound";
 
@@ -54,6 +57,7 @@ function AppRoutes() {
               <Route path="/collaborators" element={<Collaborators />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/expenses" element={<Expenses />} />
+              <Route path="/reports" element={<Reports />} />
               <Route path="/profile" element={<Profile />} />
             </>
           )}
@@ -63,6 +67,7 @@ function AppRoutes() {
             <>
               <Route path="/" element={<CollaboratorDashboard />} />
               <Route path="/dashboard" element={<CollaboratorDashboard />} />
+              <Route path="/products" element={<CollaboratorProducts />} />
               <Route path="/tasks" element={<CollaboratorTasks />} />
               <Route path="/profile" element={<Profile />} />
             </>
@@ -80,13 +85,15 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <NotificationProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </TooltipProvider>
+        <PrivacyProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </TooltipProvider>
+        </PrivacyProvider>
       </NotificationProvider>
     </AuthProvider>
   </QueryClientProvider>

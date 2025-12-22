@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,7 @@ import { toast } from 'sonner';
 import type { Expense, ExpenseCategory } from '@/types';
 import { formatCurrency, getExpenseCategoryLabel, formatDate, expensesApi, statsApi } from '@/services/api';
 import { PageLoader } from '@/components/ui/loader';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 const expenseCategories: { value: ExpenseCategory; label: string }[] = [
   { value: 'transport', label: 'Transport' },
@@ -59,109 +60,93 @@ const getCategoryColor = (category: ExpenseCategory): string => {
 };
 
 export default function Expenses() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [expenseList, setExpenseList] = useState<Expense[]>([]);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | 'all'>('all');
-  const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalExpenses, setTotalExpenses] = useState(0);
-  const [monthlyExpenses, setMonthlyExpenses] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
 
-  const fetchExpenses = async () => {
-    try {
-      setIsLoading(true);
-      const [data, monthlyStats] = await Promise.all([
-        expensesApi.getAll(currentPage),
-        statsApi.getMonthly()
-      ]);
+  // Fetch expenses
+  const { data: expensesData, isLoading: expensesLoading } = useQuery({
+    queryKey: ['expenses', currentPage, searchQuery, categoryFilter],
+    queryFn: () => expensesApi.getAll(currentPage, 50, searchQuery, categoryFilter === 'all' ? undefined : categoryFilter),
+    placeholderData: (previousData) => previousData,
+  });
 
-      const mappedData = data.items.map((item: any) => ({
-        ...item,
-        createdAt: item.createdAt || item.created_at || new Date().toISOString(),
-      }));
+  // Fetch stats (global and monthly)
+  const { data: monthlyStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['expense-stats'],
+    queryFn: () => statsApi.getMonthly(),
+  });
 
-      setExpenseList(mappedData);
-      setTotalPages(data.pages);
-      setTotalCount(data.total);
-      setTotalExpenses(data.total_amount);
-      setMonthlyExpenses(monthlyStats.totalExpenses);
-    } catch (error) {
-      console.error(error);
-      toast.error('Erreur lors du chargement des dépenses');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const expenseList = expensesData?.items || [];
+  const totalPages = expensesData?.pages || 1;
+  const totalCount = expensesData?.total || 0;
+  const totalAmount = expensesData?.total_amount || 0;
+  const isLoading = expensesLoading || statsLoading;
 
-  useEffect(() => {
-    fetchExpenses();
-  }, [currentPage]);
+  const addExpenseMutation = useMutation({
+    mutationFn: (payload: any) => expensesApi.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expense-stats'] });
+      toast.success('Dépense ajoutée avec succès');
+      setIsAddDialogOpen(false);
+    },
+    onError: () => toast.error("Erreur lors de l'ajout de la dépense")
+  });
 
-  const filteredExpenses = expenseList.filter(expense => {
-    const matchesSearch = expense.note?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      getExpenseCategoryLabel(expense.category).toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+  const updateExpenseMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) => expensesApi.update(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expense-stats'] });
+      toast.success('Dépense modifiée avec succès');
+      setEditingExpense(null);
+    },
+    onError: () => toast.error("Erreur lors de la modification")
+  });
+
+  const deleteExpenseMutation = useMutation({
+    mutationFn: (id: string) => expensesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['expense-stats'] });
+      toast.success('Dépense supprimée');
+    },
+    onError: () => toast.error("Erreur lors de la suppression")
   });
 
   const handleAddExpense = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const newExpensePayload = {
+    addExpenseMutation.mutate({
       amount: Number(formData.get('amount')),
       category: formData.get('category') as ExpenseCategory,
       date: formData.get('date') as string,
       note: formData.get('note') as string || undefined,
-    };
-
-    try {
-      await expensesApi.create(newExpensePayload);
-      toast.success('Dépense ajoutée avec succès');
-      setIsAddDialogOpen(false);
-      fetchExpenses();
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de l'ajout de la dépense");
-    }
+    });
   };
 
   const handleEditExpense = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!editingExpense) return;
-
     const formData = new FormData(e.currentTarget);
-    const updatedPayload: Partial<Expense> = {
-      amount: Number(formData.get('amount')),
-      category: formData.get('category') as ExpenseCategory,
-      date: formData.get('date') as string,
-      note: formData.get('note') as string || undefined,
-    };
-
-    try {
-      await expensesApi.update(editingExpense.id, updatedPayload);
-      toast.success('Dépense modifiée avec succès');
-      setEditingExpense(null);
-      fetchExpenses();
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la modification");
-    }
+    updateExpenseMutation.mutate({
+      id: editingExpense.id,
+      payload: {
+        amount: Number(formData.get('amount')),
+        category: formData.get('category') as ExpenseCategory,
+        date: formData.get('date') as string,
+        note: formData.get('note') as string || undefined,
+      }
+    });
   };
 
   const handleDeleteExpense = async (id: string) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette dépense ?")) return;
-    try {
-      await expensesApi.delete(id);
-      toast.success('Dépense supprimée');
-      fetchExpenses();
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de la suppression");
-    }
+    deleteExpenseMutation.mutate(id);
   };
 
   const ExpenseForm = ({ expense, onSubmit }: { expense?: Expense; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void }) => (
@@ -235,20 +220,22 @@ export default function Expenses() {
           <div className="bg-card p-4 rounded-xl border border-border">
             <div className="flex items-center gap-2 mb-2">
               <Receipt className="w-4 h-4 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Total dépenses</p>
+              <p className="text-sm text-muted-foreground">Total dépenses (page)</p>
             </div>
-            <p className="text-2xl font-bold">{formatCurrency(totalCount)}</p> {/* Total count */}
+            <p className="text-2xl font-bold font-mono">{formatCurrency(totalAmount)}</p>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border">
             <div className="flex items-center gap-2 mb-2">
               <TrendingDown className="w-4 h-4 text-destructive" />
-              <p className="text-sm text-muted-foreground">Ce mois</p>
+              <p className="text-sm text-muted-foreground">Mois en cours</p>
             </div>
-            <p className="text-2xl font-bold text-destructive">{formatCurrency(monthlyExpenses)}</p>
+            <p className="text-2xl font-bold text-destructive font-mono">
+              {monthlyStats ? formatCurrency(monthlyStats.totalExpenses) : '...'}
+            </p>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border">
-            <p className="text-sm text-muted-foreground mb-2">Total général</p>
-            <p className="text-2xl font-bold">{formatCurrency(totalExpenses)}</p>
+            <p className="text-sm text-muted-foreground mb-2">Nombre total</p>
+            <p className="text-2xl font-bold font-mono">{totalCount}</p>
           </div>
         </div>
 
@@ -305,10 +292,10 @@ export default function Expenses() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredExpenses.map((expense) => (
+                {expenseList.map((expense) => (
                   <TableRow key={expense.id}>
                     <TableCell>
-                      <Badge variant="secondary">{formatDate(expense.date)}</Badge>
+                      <Badge variant="secondary" className="font-mono">{formatDate(expense.date)}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge className={getCategoryColor(expense.category)}>
@@ -322,7 +309,7 @@ export default function Expenses() {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-medium text-destructive">
+                    <TableCell className="text-right font-bold text-destructive font-mono">
                       -{formatCurrency(expense.amount)}
                     </TableCell>
                     <TableCell className="text-right">
@@ -348,7 +335,7 @@ export default function Expenses() {
 
         {/* Pagination Controls */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-2 animate-fade-in">
             <Button
               variant="outline"
               size="sm"
@@ -357,9 +344,9 @@ export default function Expenses() {
             >
               Précédent
             </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} sur {totalPages}
-            </span>
+            <div className="px-3 py-1 bg-muted rounded-md text-sm font-medium">
+              Page {currentPage} / {totalPages}
+            </div>
             <Button
               variant="outline"
               size="sm"

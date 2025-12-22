@@ -1,6 +1,7 @@
-import { Bell, Search, User, LogOut, CheckCheck } from 'lucide-react';
+import { Bell, Search, User, LogOut, CheckCheck, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { usePrivacy } from '@/contexts/PrivacyContext';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -20,27 +21,27 @@ import { formatDate } from '@/services/api';
 export function Header() {
   const { user, logout } = useAuth();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { isPrivate, togglePrivacy } = usePrivacy();
 
   const handleLogout = () => {
     logout();
   };
 
   return (
-    <header className="h-16 bg-card border-b border-border px-6 flex items-center justify-between sticky top-0 z-10">
-      {/* Search */}
-      <div className="flex-1 max-w-md">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Rechercher..."
-            className="pl-10 bg-muted border-0 focus-visible:ring-primary"
-          />
-        </div>
-      </div>
-
+    <header className="h-16 bg-card border-b border-border px-6 flex items-center justify-end sticky top-0 z-10">
       {/* Right side */}
       <div className="flex items-center gap-4">
+        {/* Privacy Toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={togglePrivacy}
+          className="h-9 w-9 text-muted-foreground hover:text-primary"
+          title={isPrivate ? "Afficher les prix d'achat" : "Masquer les prix d'achat"}
+        >
+          {isPrivate ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+        </Button>
+
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

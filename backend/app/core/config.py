@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     
     # CORS
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:8080", "http://localhost:3000"]
+
+    # SMTP (Email)
+    smtp_server: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user: str = os.getenv("SMTP_USER", "")
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    smtp_from: str = os.getenv("SMTP_FROM", "")
     
     model_config = SettingsConfigDict(env_file=".env")
 

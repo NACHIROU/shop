@@ -23,6 +23,14 @@ async def get_tasks(
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
     return await TaskService.get_tasks(admin_id, collaborator_id)
 
+@router.get("/my", response_model=list[TaskResponse])
+async def get_my_tasks(
+    current_user: User = Depends(get_current_admin_or_collaborator)
+):
+    admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
+    collaborator_id = str(current_user.id) if current_user.role == "collaborator" else None
+    return await TaskService.get_tasks(admin_id, collaborator_id)
+
 @router.get("/{task_id}", response_model=TaskResponse)
 async def get_task(
     task_id: str,

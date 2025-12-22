@@ -129,7 +129,7 @@ class TaskService:
         if collaborator_id:
             query["collaborator_id"] = collaborator_id
         
-        cursor = tasks_collection.find(query)
+        cursor = tasks_collection.find(query).sort("created_at", -1)
         tasks = []
         async for doc in cursor:
             task = Task(**doc)
@@ -233,24 +233,67 @@ class TaskService:
                 {"$set": update_dict}
             )
         
+        # If status is updated away from completed, rollback
+        old_status = (await TaskService.get_task_by_id(task_id, admin_id)).status
+        if old_status == "completed" and update_dict.get("status") != "completed" and update_dict.get("status") is not None:
+             await TaskService._rollback_completed_task_operations(task_id, admin_id)
+
         # If status is updated to completed, handle operations
-        if update_dict.get("status") == "completed":
+        if update_dict.get("status") == "completed" and old_status != "completed":
             await TaskService._record_completed_task_operations(task_id, admin_id)
             
         return await TaskService.get_task_by_id(task_id, admin_id)
 
     @staticmethod
     async def update_task_status(task_id: str, admin_id: str, status: str) -> TaskResponse:
+        task_before = await TaskService.get_task_by_id(task_id, admin_id)
+        old_status = task_before.status
+
         await tasks_collection.update_one(
             {"_id": ObjectId(task_id) if ObjectId.is_valid(task_id) else task_id, "admin_id": admin_id},
             {"$set": {"status": status, "updated_at": datetime.utcnow()}}
         )
         
         # Handle operations when status is completed
-        if status == "completed":
+        if status == "completed" and old_status != "completed":
             await TaskService._record_completed_task_operations(task_id, admin_id)
+        # Handle rollback if status was completed and moved to something else
+        elif old_status == "completed" and status != "completed":
+            await TaskService._rollback_completed_task_operations(task_id, admin_id)
+        
+        # New: Robust cleanup for cancelled status
+        if status == "cancelled":
+            await TaskService._cleanup_task_resources(task_id, admin_id)
             
         return await TaskService.get_task_by_id(task_id, admin_id)
+
+    @staticmethod
+    async def _cleanup_task_resources(task_id: str, admin_id: str):
+        """Perform full cleanup for a task (on cancellation or deletion)"""
+        task_doc = await tasks_collection.find_one({
+            "_id": ObjectId(task_id) if ObjectId.is_valid(task_id) else task_id,
+            "admin_id": admin_id
+        })
+        if not task_doc:
+            return
+
+        task = Task(**task_doc)
+
+        # 1. Rollback operations if it was completed
+        # This is safe to call even if not completed, it checks for existing operations by note
+        await TaskService._rollback_completed_task_operations(task_id, admin_id)
+
+        # 2. Specific cleanup for "troc" (delete incoming product if it exists and wasn't sold)
+        if task.type == "troc" and task.incoming_product_imei:
+            incoming_product = await products_collection.find_one({
+                "admin_id": admin_id,
+                "imei": task.incoming_product_imei,
+                "name": task.incoming_product_name
+            })
+            if incoming_product:
+                # Only delete if it hasn't been sold yet (is_archived would be true if sold)
+                if not incoming_product.get("is_archived", False):
+                    await products_collection.delete_one({"_id": incoming_product["_id"]})
 
     @staticmethod
     async def _record_completed_task_operations(task_id: str, admin_id: str):
@@ -274,6 +317,7 @@ class TaskService:
             purchase_price = product.get("purchase_price", 0) if product else 0
             sale_profit = (task.selling_price or 0) - purchase_price
             
+            # 1. Update the operation
             op = Operation(
                 admin_id=admin_id,
                 collaborator_id=task.collaborator_id,
@@ -287,10 +331,27 @@ class TaskService:
             )
             await operations_collection.insert_one(op.dict(by_alias=True))
             
+            # Get collaborator name for archiving
+            collaborator = await users_collection.find_one({"_id": ObjectId(task.collaborator_id) if ObjectId.is_valid(task.collaborator_id) else task.collaborator_id})
+            collaborator_name = collaborator["name"] if collaborator else "Unknown"
+
+            # 2. Archive the product
+            await products_collection.update_one(
+                {"_id": ObjectId(task.product_id) if ObjectId.is_valid(task.product_id) else task.product_id},
+                {"$set": {
+                    "is_archived": True,
+                    "selling_price": task.selling_price,
+                    "client_name": task.client_name or task.client,
+                    "sold_by": collaborator_name,
+                    "sold_at": datetime.utcnow(),
+                    "stock": 0 # Once sold, stock should be 0 (or reduced if we support multiple, but here it's IMEI based)
+                }}
+            )
+            
         elif task.type == "troc" and task.outgoing_product_id:
             # Operation for outgoing product (sale)
-            # Profit logic: Price(Incoming) - Price(Outgoing) as requested
-            troc_profit = (task.incoming_product_price or 0) - (task.outgoing_product_price or 0)
+            # Profit logic: Price(Outgoing) - Price(Incoming) = Cash received
+            troc_profit = (task.outgoing_product_price or 0) - (task.incoming_product_price or 0)
             
             # 1. Record the "sale" of the outgoing product
             op_out = Operation(
@@ -305,6 +366,22 @@ class TaskService:
                 note=f"Task completion (trade-out): {task_id}"
             )
             await operations_collection.insert_one(op_out.dict(by_alias=True))
+            
+            # Archive the outgoing product
+            collaborator = await users_collection.find_one({"_id": ObjectId(task.collaborator_id) if ObjectId.is_valid(task.collaborator_id) else task.collaborator_id})
+            collaborator_name = collaborator["name"] if collaborator else "Unknown"
+
+            await products_collection.update_one(
+                {"_id": ObjectId(task.outgoing_product_id) if ObjectId.is_valid(task.outgoing_product_id) else task.outgoing_product_id},
+                {"$set": {
+                    "is_archived": True,
+                    "selling_price": task.outgoing_product_price,
+                    "client_name": task.recovered_from, # In a trade, the person we get the model from is the 'client' of the outgoing one
+                    "sold_by": collaborator_name,
+                    "sold_at": datetime.utcnow(),
+                    "stock": 0
+                }}
+            )
             
             # 2. Record the "purchase" of the incoming product to reflect financial flow
             # We need to find the ID of the product we created during task creation
@@ -337,7 +414,65 @@ class TaskService:
             )
 
     @staticmethod
+    async def _rollback_completed_task_operations(task_id: str, admin_id: str):
+        task_doc = await tasks_collection.find_one({"_id": ObjectId(task_id) if ObjectId.is_valid(task_id) else task_id})
+        if not task_doc:
+            return
+
+        task = Task(**task_doc)
+
+        # 1. Delete associated operations
+        await operations_collection.delete_many({"note": {"$regex": f"Task completion.*: {task_id}"}})
+
+        # 2. Restore products
+        if task.type == "vente" and task.product_id:
+            await products_collection.update_one(
+                {"_id": ObjectId(task.product_id) if ObjectId.is_valid(task.product_id) else task.product_id},
+                {"$set": {
+                    "is_archived": False,
+                    "stock": 1,
+                    "selling_price": None,
+                    "client_name": None,
+                    "sold_by": None,
+                    "sold_at": None
+                }}
+            )
+        elif task.type == "troc" and task.outgoing_product_id:
+            # Restore outgoing product
+            await products_collection.update_one(
+                {"_id": ObjectId(task.outgoing_product_id) if ObjectId.is_valid(task.outgoing_product_id) else task.outgoing_product_id},
+                {"$set": {
+                    "is_archived": False,
+                    "stock": 1,
+                    "selling_price": None,
+                    "client_name": None,
+                    "sold_by": None,
+                    "sold_at": None
+                }}
+            )
+            # Delete incoming product (as if it never existed)
+            if task.incoming_product_imei:
+                await products_collection.delete_one({
+                    "admin_id": admin_id,
+                    "imei": task.incoming_product_imei,
+                    "name": task.incoming_product_name
+                })
+
+        # Notify admin of rollback (if modified by collaborator)
+        # This is optional but good for transparency if they watch notifications
+        if task.collaborator_id != task.admin_id:
+            await NotificationService.create_notification(
+                user_id=task.admin_id,
+                title="Tâche réinitialisée",
+                message=f"Le statut de la tâche '{task.title}' a été modifié, les opérations liées ont été annulées.",
+                type="task_updated"
+            )
+
+    @staticmethod
     async def delete_task(task_id: str, admin_id: str):
+        # Perform cleanup before deletion
+        await TaskService._cleanup_task_resources(task_id, admin_id)
+        
         result = await tasks_collection.delete_one({
             "_id": ObjectId(task_id) if ObjectId.is_valid(task_id) else task_id,
             "admin_id": admin_id

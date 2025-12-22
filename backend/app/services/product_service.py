@@ -25,11 +25,29 @@ class ProductService:
             imei=product_data.imei,
             purchase_price=product_data.purchase_price,
             category=product_data.category,
-            stock=product_data.stock,
+            stock=0, # Base stock is 0, we record the initial stock as a purchase operation
             supplier_id=product_data.supplier_id
         )
         result = await products_collection.insert_one(product.dict(by_alias=True))
         product.id = result.inserted_id
+
+        # Record as a purchase operation for treasury reports
+        from app.models.operation import Operation
+        from app.db.mongo import operations_collection
+        
+        operation = Operation(
+            admin_id=admin_id,
+            collaborator_id=admin_id, # Created by admin
+            type="purchase",
+            product_id=str(product.id),
+            supplier_id=product.supplier_id,
+            quantity=product_data.stock or 1,
+            amount=product.purchase_price * (product_data.stock or 1),
+            operation_date=datetime.utcnow(),
+            note=f"Achat initial à la création du produit: {product.name}"
+        )
+        await operations_collection.insert_one(operation.dict(by_alias=True))
+
         return product
 
     @staticmethod
@@ -38,11 +56,14 @@ class ProductService:
         page: int = 1, 
         size: int = 50,
         search: Optional[str] = None,
-        category: Optional[str] = None
-    ) -> PaginatedProductResponse:
+        category: Optional[str] = None,
+        is_archived: bool = False,
+        restricted: bool = False
+    ) -> dict:
         import math
         skip = (page - 1) * size
         query = {"admin_id": admin_id} if admin_id else {}
+        query["is_archived"] = is_archived
         
         # Add search filter
         if search:
@@ -57,56 +78,70 @@ class ProductService:
         
         total = await products_collection.count_documents(query)
         
-        # Calculate total value (purchase price * stock)
-        pipeline = [
-            {"$match": query},
-            {"$group": {
-                "_id": None, 
-                "total_value": {"$sum": {"$multiply": ["$purchase_price", "$stock"]}}
-            }}
-        ]
-        stats = await products_collection.aggregate(pipeline).to_list(length=1)
-        total_value = stats[0]["total_value"] if stats else 0
+        # Calculate total value (purchase price * stock) - only for non-archived products usually
+        # Skip for restricted views to avoid leaking total inventory value
+        total_value = 0
+        if not restricted:
+            pipeline = [
+                {"$match": query},
+                {"$group": {
+                    "_id": None, 
+                    "total_value": {"$sum": {"$multiply": ["$purchase_price", "$stock"]}}
+                }}
+            ]
+            stats = await products_collection.aggregate(pipeline).to_list(length=1)
+            total_value = stats[0]["total_value"] if stats else 0
 
-        cursor = products_collection.find(query).skip(skip).limit(size)
+        cursor = products_collection.find(query).skip(skip).limit(size).sort("created_at", -1)
         
         products = []
         async for doc in cursor:
             product = Product(**doc)
-            # Get supplier name
-            supplier_name = None
-            if product.supplier_id:
-                supplier = await suppliers_collection.find_one({"_id": ObjectId(product.supplier_id) if ObjectId.is_valid(product.supplier_id) else product.supplier_id, "admin_id": admin_id})
-                if supplier:
-                    supplier_name = supplier["name"]
-            
             # Calculate stock from operations
             stock = await ProductService._calculate_stock(str(product.id), admin_id, product.stock)
             
-            products.append(ProductResponse(
-                id=str(product.id),
-                name=product.name,
-                description=product.description,
-                imei=product.imei,
-                purchase_price=product.purchase_price,
-                stock=stock,
-                category=product.category,
-                supplier_id=product.supplier_id,
-                supplier_name=supplier_name,
-                created_at=product.created_at.isoformat()
-            ))
+            data = {
+                "id": str(product.id),
+                "name": product.name,
+                "description": product.description,
+                "imei": product.imei,
+                "stock": stock,
+                "category": product.category,
+                "is_archived": product.is_archived,
+                "selling_price": product.selling_price,
+                "client_name": product.client_name,
+                "sold_by": product.sold_by,
+                "sold_at": product.sold_at.isoformat() if product.sold_at else None,
+                "created_at": product.created_at.isoformat()
+            }
+
+            if not restricted:
+                # Get supplier name
+                supplier_name = None
+                if product.supplier_id:
+                    supplier = await suppliers_collection.find_one({"_id": ObjectId(product.supplier_id) if ObjectId.is_valid(product.supplier_id) else product.supplier_id, "admin_id": admin_id})
+                    if supplier:
+                        supplier_name = supplier["name"]
+                
+                data.update({
+                    "purchase_price": product.purchase_price,
+                    "supplier_id": product.supplier_id,
+                    "supplier_name": supplier_name
+                })
             
-        return PaginatedProductResponse(
-            items=products,
-            total=total,
-            page=page,
-            size=size,
-            pages=math.ceil(total / size),
-            total_value=total_value
-        )
+            products.append(data)
+            
+        return {
+            "items": products,
+            "total": total,
+            "page": page,
+            "size": size,
+            "pages": math.ceil(total / size) if size > 0 else 1,
+            "total_value": total_value
+        }
 
     @staticmethod
-    async def get_product_by_id(product_id: str, admin_id: str) -> ProductResponse:
+    async def get_product_by_id(product_id: str, admin_id: str, restricted: bool = False) -> dict:
         try:
             oid = ObjectId(product_id)
         except:
@@ -116,24 +151,38 @@ class ProductService:
         if not doc:
             raise HTTPException(status_code=404, detail="Product not found")
         product = Product(**doc)
-        supplier_name = None
-        if product.supplier_id:
-            supplier = await suppliers_collection.find_one({"_id": ObjectId(product.supplier_id) if ObjectId.is_valid(product.supplier_id) else product.supplier_id, "admin_id": admin_id})
-            if supplier:
-                supplier_name = supplier["name"]
+        
         stock = await ProductService._calculate_stock(product_id, admin_id, product.stock)
-        return ProductResponse(
-            id=str(product.id),
-            name=product.name,
-            description=product.description,
-            imei=product.imei,
-            purchase_price=product.purchase_price,
-            stock=stock,
-            category=product.category,
-            supplier_id=product.supplier_id,
-            supplier_name=supplier_name,
-            created_at=product.created_at.isoformat()
-        )
+        
+        data = {
+            "id": str(product.id),
+            "name": product.name,
+            "description": product.description,
+            "imei": product.imei,
+            "stock": stock,
+            "category": product.category,
+            "is_archived": product.is_archived,
+            "selling_price": product.selling_price,
+            "client_name": product.client_name,
+            "sold_by": product.sold_by,
+            "sold_at": product.sold_at.isoformat() if product.sold_at else None,
+            "created_at": product.created_at.isoformat()
+        }
+
+        if not restricted:
+            supplier_name = None
+            if product.supplier_id:
+                supplier = await suppliers_collection.find_one({"_id": ObjectId(product.supplier_id) if ObjectId.is_valid(product.supplier_id) else product.supplier_id, "admin_id": admin_id})
+                if supplier:
+                    supplier_name = supplier["name"]
+            
+            data.update({
+                "purchase_price": product.purchase_price,
+                "supplier_id": product.supplier_id,
+                "supplier_name": supplier_name
+            })
+            
+        return data
 
     @staticmethod
     async def update_product(product_id: str, admin_id: str, update_data: ProductUpdate) -> ProductResponse:
@@ -153,6 +202,14 @@ class ProductService:
                 raise HTTPException(status_code=400, detail=f"Un produit avec cet IMEI ({update_dict['imei']}) existe déjà")
 
         if update_dict:
+            # If stock is being updated, we need to adjust base_stock such that:
+            # base_stock + purchases - sales = target_stock
+            if "stock" in update_dict:
+                target_stock = update_dict.pop("stock")
+                purchases = await operations_collection.count_documents({"product_id": product_id, "type": "purchase", "admin_id": admin_id})
+                sales = await operations_collection.count_documents({"product_id": product_id, "type": "sale", "admin_id": admin_id})
+                update_dict["stock"] = target_stock - (purchases - sales)
+
             update_dict["updated_at"] = datetime.utcnow()
             result = await products_collection.update_one(
                 {"_id": oid, "admin_id": admin_id},

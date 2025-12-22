@@ -20,6 +20,7 @@ class MonthlyStats(BaseModel):
     completed_tasks: int
     in_progress_tasks: int
     cancelled_tasks: int
+    total_value: float = 0
 
 class DailyOverview(BaseModel):
     sales: float
@@ -30,3 +31,4 @@ class DailyOverview(BaseModel):
     net_profit: float
     new_tasks: int
     completed_tasks: int
+    total_value: float = 0
