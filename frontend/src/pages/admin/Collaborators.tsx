@@ -13,7 +13,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Plus, Search, Mail, Phone, MoreVertical, User, CheckCircle2, Copy, Check, RefreshCcw } from 'lucide-react';
+import { Plus, Search, Mail, Phone, MoreVertical, User, CheckCircle2, Copy, Check, RefreshCcw, LockKeyhole } from 'lucide-react';
 import { toast } from 'sonner';
 import { authApi } from '@/services/api';
 import type { Collaborator } from '@/types';
@@ -105,6 +105,16 @@ export default function Collaborators() {
     },
     onError: (error: any) => {
       toast.error('Erreur lors de la génération du lien: ' + error.message);
+    }
+  });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: (id: string) => authApi.resetCollaboratorPassword(id),
+    onSuccess: () => {
+      toast.success('Réinitialisation effectuée. Mot de passe: Passw0rde');
+    },
+    onError: (error: any) => {
+      toast.error('Erreur lors de la réinitialisation: ' + error.message);
     }
   });
 
@@ -317,6 +327,9 @@ export default function Collaborators() {
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => regenerateLinkMutation.mutate(collab.id)}>
                         <RefreshCcw className="mr-2 h-4 w-4" /> Régénérer lien
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => resetPasswordMutation.mutate(collab.id)}>
+                        <LockKeyhole className="mr-2 h-4 w-4" /> Réinitialiser MDP
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

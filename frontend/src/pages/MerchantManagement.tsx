@@ -69,6 +69,16 @@ export default function MerchantManagement() {
         },
     });
 
+    const resetPasswordMutation = useMutation({
+        mutationFn: authApi.resetUserPassword,
+        onSuccess: () => {
+            toast.success('Réinitialisation demandée. L\'utilisateur devra changer son mot de passe.');
+        },
+        onError: (error: any) => {
+            toast.error('Erreur: ' + error.message);
+        }
+    });
+
     const copyToClipboard = () => {
         navigator.clipboard.writeText(inviteLink);
         toast.success('Lien copié !');
@@ -213,10 +223,19 @@ export default function MerchantManagement() {
                                             variant="outline"
                                             size="sm"
                                             className="flex-1 text-xs gap-2"
+                                            onClick={() => resetPasswordMutation.mutate(merchant.id)}
+                                            disabled={resetPasswordMutation.isPending}
+                                        >
+                                            <LockKeyhole className="h-3 w-3" /> Réinitialiser
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1 text-xs gap-2"
                                             onClick={() => generateLinkMutation.mutate(merchant.id)}
                                             disabled={generateLinkMutation.isPending}
                                         >
-                                            <RefreshCcw className="h-3 w-3" /> Lien d'activation
+                                            <RefreshCcw className="h-3 w-3" /> Lien
                                         </Button>
                                     </div>
                                 </div>

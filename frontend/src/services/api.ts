@@ -79,8 +79,9 @@ export const authApi = {
       method: 'POST',
     }),
   verifyInviteToken: (token: string) =>
-    apiFetch<{ user_id: string; email: string; name: string }>(`/auth/verify-invite/${token}`, {
+    apiFetch<{ user_id: string; email: string; name: string }>(`/auth/verify-invite`, {
       method: 'POST',
+      body: JSON.stringify({ token }),
     }),
   activateAccount: (token: string, newPassword: string) =>
     apiFetch<{ access_token: string; refresh_token: string; token_type: string; user: any }>('/auth/activate', {
@@ -100,6 +101,14 @@ export const authApi = {
   deleteCollaborator: (id: string) =>
     apiFetch(`/auth/collaborators/${id}`, {
       method: 'DELETE',
+    }),
+  deleteCollaborator: (id: string) =>
+    apiFetch(`/auth/collaborators/${id}`, {
+      method: 'DELETE',
+    }),
+  resetCollaboratorPassword: (id: string) =>
+    apiFetch<{ message: string }>(`/auth/collaborators/${id}/reset-password`, {
+      method: 'POST',
     }),
   getMerchants: () =>
     apiFetch<any[]>('/auth/merchants'),
