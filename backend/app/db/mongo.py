@@ -13,6 +13,7 @@ expenses_collection = database["expenses"]
 tasks_collection = database["tasks"]
 notifications_collection = database["notifications"]
 audit_logs_collection = database["audit_logs"]
+categories_collection = database["categories"]
 
 async def create_indexes():
     # Operations indexes

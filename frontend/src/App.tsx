@@ -15,6 +15,7 @@ import Profile from "./pages/Profile";
 // Admin Pages
 import AdminDashboard from "./pages/admin/Dashboard";
 import Products from "./pages/admin/Products";
+import Categories from "./pages/admin/Categories";
 import Suppliers from "./pages/admin/Suppliers";
 import Collaborators from "./pages/admin/Collaborators";
 import Tasks from "./pages/admin/Tasks";
@@ -67,6 +68,7 @@ function AppRoutes() {
               <Route path="/" element={<AdminDashboard />} />
               <Route path="/dashboard" element={<AdminDashboard />} />
               <Route path="/products" element={<Products />} />
+              <Route path="/categories" element={<Categories />} />
               <Route path="/suppliers" element={<Suppliers />} />
               <Route path="/collaborators" element={<Collaborators />} />
               <Route path="/tasks" element={<Tasks />} />

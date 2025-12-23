@@ -10,6 +10,7 @@ import type {
   TaskStatus,
   Expense,
   ExpenseCategory,
+  Category,
   DailyStats,
   MonthlyStats,
   DailyOverview,
@@ -125,11 +126,23 @@ export const suppliersApi = {
 
 // ============= Products API =============
 export const productsApi = {
-  getAll: (page: number = 1, limit: number = 50, search?: string, category?: string, isArchived: boolean = false): Promise<PaginatedResponse<Product>> => {
+  getAll: (page: number = 1, limit: number = 50, search?: string, category?: string, isArchived: boolean = false, startDate?: string, endDate?: string, soldBy?: string): Promise<PaginatedResponse<Product>> => {
     let url = `/products/?page=${page}&size=${limit}&is_archived=${isArchived}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
     if (category && category !== 'all') url += `&category=${encodeURIComponent(category)}`;
+    if (startDate) url += `&start_date=${startDate}`;
+    if (endDate) url += `&end_date=${endDate}`;
+    if (soldBy && soldBy !== 'all') url += `&sold_by=${soldBy}`;
     return apiFetch(url);
+  },
+  export: (search?: string, category?: string, isArchived: boolean = false, startDate?: string, endDate?: string, soldBy?: string): Promise<Blob> => {
+    let url = `/products/export?is_archived=${isArchived}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    if (category && category !== 'all') url += `&category=${encodeURIComponent(category)}`;
+    if (startDate) url += `&start_date=${startDate}`;
+    if (endDate) url += `&end_date=${endDate}`;
+    if (soldBy && soldBy !== 'all') url += `&sold_by=${soldBy}`;
+    return apiFetch(url, {}, true);
   },
   getById: (id: string): Promise<Product> => apiFetch(`/products/${id}`),
   create: (data: Omit<Product, 'id' | 'createdAt'>): Promise<Product> =>
@@ -138,6 +151,17 @@ export const productsApi = {
     apiFetch(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string): Promise<void> =>
     apiFetch(`/products/${id}`, { method: 'DELETE' }),
+  bulkAction: (action: 'delete' | 'archive', productIds: string[]): Promise<{ message: string }> =>
+    apiFetch('/products/bulk', { method: 'POST', body: JSON.stringify({ action, product_ids: productIds }) }),
+};
+
+// ============= Categories API =============
+export const categoriesApi = {
+  getAll: (): Promise<Category[]> => apiFetch('/categories/'),
+  create: (data: { name: string }): Promise<Category> =>
+    apiFetch('/categories/', { method: 'POST', body: JSON.stringify(data) }),
+  delete: (id: string): Promise<void> =>
+    apiFetch(`/categories/${id}`, { method: 'DELETE' }),
 };
 
 // ============= Collaborators API =============
@@ -154,9 +178,9 @@ export const collaboratorsApi = {
 
 // ============= Tasks API =============
 export const tasksApi = {
-  getAll: (date?: string): Promise<Task[]> => {
-    let url = '/tasks/';
-    if (date) url += `?date=${date}`;
+  getAll: (date?: string, isArchived: boolean = false): Promise<Task[]> => {
+    let url = `/tasks/?is_archived=${isArchived}`;
+    if (date) url += `&date=${date}`;
     return apiFetch(url);
   },
   getById: (id: string): Promise<Task> => apiFetch(`/tasks/${id}`),
@@ -175,6 +199,10 @@ export const tasksApi = {
     apiFetch(`/tasks/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   delete: (id: string): Promise<void> =>
     apiFetch(`/tasks/${id}`, { method: 'DELETE' }),
+  cleanup: (): Promise<{ archived_count: number }> =>
+    apiFetch('/tasks/cleanup', { method: 'POST' }),
+  bulkAction: (action: 'delete' | 'archive', taskIds: string[]): Promise<{ message: string }> =>
+    apiFetch('/tasks/bulk', { method: 'POST', body: JSON.stringify({ action, task_ids: taskIds }) }),
 };
 
 // ============= Expenses API =============

@@ -35,6 +35,8 @@ import type { Expense, ExpenseCategory } from '@/types';
 import { formatCurrency, getExpenseCategoryLabel, formatDate, expensesApi, statsApi } from '@/services/api';
 import { PageLoader } from '@/components/ui/loader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ConfirmationModal } from '@/components/common/ConfirmationModal';
+import { useConfirmation } from '@/hooks/useConfirmation';
 
 const expenseCategories: { value: ExpenseCategory; label: string }[] = [
   { value: 'transport', label: 'Transport' },
@@ -66,6 +68,7 @@ export default function Expenses() {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<ExpenseCategory | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const { confirm, isOpen: isConfirmOpen, options: confirmOptions, close: closeConfirm, handleConfirm } = useConfirmation();
 
   // Fetch expenses
   const { data: expensesData, isLoading: expensesLoading } = useQuery({
@@ -145,8 +148,13 @@ export default function Expenses() {
   };
 
   const handleDeleteExpense = async (id: string) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette dépense ?")) return;
-    deleteExpenseMutation.mutate(id);
+    confirm({
+      title: 'Supprimer la dépense',
+      message: 'Voulez-vous vraiment supprimer cette dépense ?',
+      variant: 'danger',
+      confirmText: 'Supprimer',
+      onConfirm: () => deleteExpenseMutation.mutate(id)
+    });
   };
 
   const ExpenseForm = ({ expense, onSubmit }: { expense?: Expense; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void }) => (
@@ -370,7 +378,18 @@ export default function Expenses() {
             {editingExpense && <ExpenseForm expense={editingExpense} onSubmit={handleEditExpense} />}
           </DialogContent>
         </Dialog>
+
+        <ConfirmationModal
+          isOpen={isConfirmOpen}
+          onClose={closeConfirm}
+          onConfirm={handleConfirm}
+          title={confirmOptions.title}
+          message={confirmOptions.message}
+          variant={confirmOptions.variant}
+          confirmText={confirmOptions.confirmText}
+          cancelText={confirmOptions.cancelText}
+        />
       </div>
-    </DashboardLayout>
+    </DashboardLayout >
   );
 }

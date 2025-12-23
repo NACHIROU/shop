@@ -19,10 +19,11 @@ async def create_task(
 async def get_tasks(
     collaborator_id: str = Query(None),
     date: str = Query(None),
+    is_archived: bool = Query(False),
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
-    return await TaskService.get_tasks(admin_id, collaborator_id, date_filter=date)
+    return await TaskService.get_tasks(admin_id, collaborator_id, date_filter=date, is_archived=is_archived)
 
 @router.get("/my", response_model=list[TaskResponse])
 async def get_my_tasks(
@@ -67,3 +68,19 @@ async def delete_task(
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
     await TaskService.delete_task(task_id, admin_id, str(current_user.id), current_user.name)
     return {"message": "Task deleted successfully"}
+
+@router.post("/cleanup")
+async def cleanup_tasks(
+    current_user: User = Depends(get_current_admin) # Only admin can trigger cleanup manually, or collab? safer admin
+):
+    admin_id = str(current_user.id)
+    return await TaskService.cleanup_tasks(admin_id)
+
+@router.post("/bulk")
+async def bulk_task_action(
+    action: str = Body(..., embed=True),
+    task_ids: list[str] = Body(..., embed=True),
+    current_user: User = Depends(get_current_admin_or_collaborator)
+):
+    admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
+    return await TaskService.bulk_action(admin_id, action, task_ids, str(current_user.id), current_user.name)

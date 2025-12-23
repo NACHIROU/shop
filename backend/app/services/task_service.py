@@ -134,8 +134,16 @@ class TaskService:
         return task
 
     @staticmethod
-    async def get_tasks(admin_id: str, collaborator_id: str = None, date_filter: str = None) -> List[TaskResponse]:
+    async def get_tasks(admin_id: str, collaborator_id: str = None, date_filter: str = None, is_archived: bool = False) -> List[TaskResponse]:
         query = {"admin_id": admin_id}
+        
+        # Handle backward compatibility for tasks without is_archived field
+        if is_archived:
+            query["is_archived"] = True
+        else:
+            # Match explicitly False OR missing
+            query["is_archived"] = {"$ne": True}
+
         if collaborator_id:
             query["collaborator_id"] = collaborator_id
         
@@ -551,3 +559,53 @@ class TaskService:
             resource_id=task_id,
             details=f"Suppression de la tâche"
         )
+
+    @staticmethod
+    async def cleanup_tasks(admin_id: str):
+        """Archive completed or cancelled tasks older than 3 days"""
+        from datetime import timedelta
+        cutoff_date = datetime.utcnow() - timedelta(days=3)
+        
+        result = await tasks_collection.update_many(
+            {
+                "admin_id": admin_id,
+                "status": {"$in": ["completed", "cancelled"]},
+                "updated_at": {"$lt": cutoff_date},
+                "is_archived": {"$ne": True}
+            },
+            {"$set": {"is_archived": True}}
+        )
+        return {"archived_count": result.modified_count}
+
+    @staticmethod
+    async def bulk_action(admin_id: str, action: str, task_ids: list[str], actor_id: str, actor_name: str):
+        from app.services.audit_log_service import AuditLogService
+        
+        count = 0
+        if action == "delete":
+            for task_id in task_ids:
+                try:
+                    await TaskService.delete_task(task_id, admin_id, actor_id, actor_name)
+                    count += 1
+                except:
+                    pass # Continue if one fails
+        elif action == "archive":
+            # Bulk archive
+            object_ids = [ObjectId(tid) for tid in task_ids if ObjectId.is_valid(tid)]
+            if object_ids:
+                result = await tasks_collection.update_many(
+                    {"_id": {"$in": object_ids}, "admin_id": admin_id},
+                    {"$set": {"is_archived": True}}
+                )
+                count = result.modified_count
+                
+        await AuditLogService.log_action(
+            admin_id=admin_id,
+            user_id=actor_id,
+            user_name=actor_name,
+            action="bulk_task_action",
+            resource_type="task",
+            resource_id="bulk",
+            details=f"Action groupée ({action}) sur {count} tâches"
+        )
+        return {"message": f"Action {action} performed on {count} tasks"}

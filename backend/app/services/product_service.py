@@ -69,7 +69,10 @@ class ProductService:
         search: Optional[str] = None,
         category: Optional[str] = None,
         is_archived: bool = False,
-        restricted: bool = False
+        restricted: bool = False,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        sold_by: Optional[str] = None
     ) -> dict:
         import math
         skip = (page - 1) * size
@@ -88,22 +91,57 @@ class ProductService:
         # Add category filter
         if category and category != "all":
             query["category"] = category
+            
+        # Add collaborator filter
+        if sold_by:
+            query["sold_by"] = sold_by
+            
+        # Add date filter
+        if start_date and end_date:
+            try:
+                # Parse dates - assuming ISO format YYYY-MM-DD
+                start = datetime.strptime(start_date, "%Y-%m-%d")
+                end = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                
+                date_field = "sold_at" if is_archived else "created_at"
+                query[date_field] = {"$gte": start, "$lte": end}
+            except ValueError:
+                # If date parsing fails, ignore or handle error
+                pass
         
         total = await products_collection.count_documents(query)
         
-        # Calculate total value (purchase price * stock) - only for non-archived products usually
+        # Calculate total value (purchase_price * stock) and total sales (selling_price)
         # Skip for restricted views to avoid leaking total inventory value
         total_value = 0
+        total_sales = 0
+        total_profit = 0
         if not restricted:
             pipeline = [
                 {"$match": query},
                 {"$group": {
                     "_id": None, 
-                    "total_value": {"$sum": {"$multiply": ["$purchase_price", "$stock"]}}
+                    "total_value": {"$sum": {"$multiply": ["$purchase_price", "$stock"]}},
+                    "total_sales": {"$sum": "$selling_price"},
+                    "total_profit": {
+                        "$sum": {
+                            "$cond": [
+                                {"$eq": ["$is_archived", True]},
+                                {"$subtract": [
+                                    {"$ifNull": ["$selling_price", 0]}, 
+                                    {"$ifNull": ["$purchase_price", 0]}
+                                ]},
+                                0
+                            ]
+                        }
+                    }
                 }}
             ]
             stats = await products_collection.aggregate(pipeline).to_list(length=1)
-            total_value = stats[0]["total_value"] if stats else 0
+            if stats:
+                total_value = stats[0].get("total_value", 0)
+                total_sales = stats[0].get("total_sales", 0)
+                total_profit = stats[0].get("total_profit", 0)
 
         cursor = products_collection.find(query).skip(skip).limit(size).sort("created_at", -1)
         
@@ -150,7 +188,9 @@ class ProductService:
             "page": page,
             "size": size,
             "pages": math.ceil(total / size) if size > 0 else 1,
-            "total_value": total_value
+            "total_value": total_value,
+            "total_sales": total_sales,
+            "total_profit": total_profit
         }
 
     @staticmethod
@@ -279,3 +319,35 @@ class ProductService:
             {"product_id": product_id, "type": "sale", "admin_id": admin_id}
         )
         return base_stock + purchases - sales
+
+    @staticmethod
+    async def bulk_action(admin_id: str, action: str, product_ids: list[str], actor_id: str, actor_name: str):
+        from app.services.audit_log_service import AuditLogService
+        
+        count = 0
+        if action == "delete":
+            for pid in product_ids:
+                try:
+                    await ProductService.delete_product(pid, admin_id, actor_id, actor_name)
+                    count += 1
+                except:
+                    pass
+        elif action == "archive":
+            object_ids = [ObjectId(pid) for pid in product_ids if ObjectId.is_valid(pid)]
+            if object_ids:
+                result = await products_collection.update_many(
+                    {"_id": {"$in": object_ids}, "admin_id": admin_id},
+                    {"$set": {"is_archived": True}}
+                )
+                count = result.modified_count
+        
+        await AuditLogService.log_action(
+            admin_id=admin_id,
+            user_id=actor_id,
+            user_name=actor_name,
+            action="bulk_product_action",
+            resource_type="product",
+            resource_id="bulk",
+            details=f"Action groupée ({action}) sur {count} produits"
+        )
+        return {"message": f"Action {action} performed on {count} products"}

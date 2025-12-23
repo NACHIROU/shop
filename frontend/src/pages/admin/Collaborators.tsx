@@ -25,6 +25,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PageLoader } from '@/components/ui/loader';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ConfirmationModal } from '@/components/common/ConfirmationModal';
+import { useConfirmation } from '@/hooks/useConfirmation';
 
 export default function Collaborators() {
   const queryClient = useQueryClient();
@@ -34,6 +36,7 @@ export default function Collaborators() {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editingCollaborator, setEditingCollaborator] = useState<Collaborator | null>(null);
+  const { confirm, isOpen: isConfirmOpen, options: confirmOptions, close: closeConfirm, handleConfirm } = useConfirmation();
 
   const { data: collaborators = [], isLoading: loading } = useQuery({
     queryKey: ['collaborators'],
@@ -126,8 +129,13 @@ export default function Collaborators() {
   };
 
   const handleDeleteCollaborator = async (id: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce collaborateur ?')) return;
-    deleteCollaboratorMutation.mutate(id);
+    confirm({
+      title: 'Supprimer le collaborateur',
+      message: 'Voulez-vous vraiment supprimer ce collaborateur ? Cette action est irréversible.',
+      variant: 'danger',
+      confirmText: 'Supprimer',
+      onConfirm: () => deleteCollaboratorMutation.mutate(id)
+    });
   };
 
   const copyInviteLink = () => {
@@ -368,7 +376,18 @@ export default function Collaborators() {
             </form>
           </DialogContent>
         </Dialog>
+
+        <ConfirmationModal
+          isOpen={isConfirmOpen}
+          onClose={closeConfirm}
+          onConfirm={handleConfirm}
+          title={confirmOptions.title}
+          message={confirmOptions.message}
+          variant={confirmOptions.variant}
+          confirmText={confirmOptions.confirmText}
+          cancelText={confirmOptions.cancelText}
+        />
       </div>
-    </DashboardLayout>
+    </DashboardLayout >
   );
 }

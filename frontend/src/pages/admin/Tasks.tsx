@@ -41,9 +41,13 @@ import {
   Clock,
   MoreVertical,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  Archive,
+  Trash2,
+  CheckSquare
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -52,6 +56,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ConfirmationModal } from '@/components/common/ConfirmationModal';
+import { useConfirmation } from '@/hooks/useConfirmation';
 
 const typeIcons = {
   vente: Package,
@@ -78,12 +84,15 @@ export default function Tasks() {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedTaskType, setSelectedTaskType] = useState<'vente' | 'troc' | 'other'>('vente');
+  const [isArchived, setIsArchived] = useState(false);
+  const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+  const { confirm, isOpen: isConfirmOpen, options: confirmOptions, close: closeConfirm, handleConfirm } = useConfirmation();
 
   // Fetch tasks
   const { data: taskList = [], isLoading: tasksLoading } = useQuery({
-    queryKey: ['tasks', selectedDate],
+    queryKey: ['tasks', selectedDate, isArchived],
     queryFn: async () => {
-      const data = await tasksApi.getAll(selectedDate || undefined);
+      const data = await tasksApi.getAll(selectedDate || undefined, isArchived);
       return data.map((t: any) => ({
         ...t,
         assignedTo: t.assigned_to,
@@ -142,6 +151,34 @@ export default function Tasks() {
     onError: () => toast.error("Erreur lors de la mise à jour du statut")
   });
 
+
+
+  const bulkActionMutation = useMutation({
+    mutationFn: ({ action, ids }: { action: 'archive' | 'delete', ids: string[] }) =>
+      tasksApi.bulkAction(action, ids),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success(`Action groupée (${variables.action}) effectuée`);
+      setSelectedTasks([]);
+    },
+    onError: (error) => {
+      toast.error('Erreur lors de l\'action groupée');
+      console.error(error);
+    }
+  });
+
+  const cleanupMutation = useMutation({
+    mutationFn: () => tasksApi.cleanup(),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success(`Nettoyage effectué : ${data.archived_count} tâches archivées`);
+    },
+    onError: (error) => {
+      toast.error('Erreur lors du nettoyage');
+      console.error(error);
+    }
+  });
+
   const deleteTaskMutation = useMutation({
     mutationFn: (id: string) => tasksApi.delete(id),
     onSuccess: () => {
@@ -195,8 +232,41 @@ export default function Tasks() {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette tâche ?")) return;
-    deleteTaskMutation.mutate(taskId);
+    confirm({
+      title: 'Supprimer la tâche',
+      message: 'Voulez-vous vraiment supprimer cette tâche ?',
+      variant: 'danger',
+      confirmText: 'Supprimer',
+      onConfirm: () => deleteTaskMutation.mutate(taskId)
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedTasks(filteredTasks.map(t => t.id));
+    } else {
+      setSelectedTasks([]);
+    }
+  };
+
+  const handleSelectTask = (taskId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedTasks(prev => [...prev, taskId]);
+    } else {
+      setSelectedTasks(prev => prev.filter(id => id !== taskId));
+    }
+  };
+
+  const handleBulkAction = (action: 'archive' | 'delete') => {
+    if (selectedTasks.length === 0) return;
+
+    confirm({
+      title: action === 'delete' ? 'Suppression groupée' : 'Archivage groupé',
+      message: `Voulez-vous vraiment ${action === 'delete' ? 'supprimer' : 'archiver'} ${selectedTasks.length} tâches ?`,
+      variant: action === 'delete' ? 'danger' : 'default',
+      confirmText: action === 'delete' ? 'Supprimer' : 'Archiver',
+      onConfirm: () => bulkActionMutation.mutate({ action, ids: selectedTasks })
+    });
   };
 
   const statusCounts = {
@@ -465,7 +535,7 @@ export default function Tasks() {
             )}
           </div>
           <div className="flex gap-2 overflow-x-auto pb-2">
-            {statusFilters.map((filter) => (
+            {!isArchived ? statusFilters.map((filter) => (
               <Button
                 key={filter.value}
                 variant={statusFilter === filter.value ? 'default' : 'outline'}
@@ -475,7 +545,73 @@ export default function Tasks() {
               >
                 {filter.label}
               </Button>
-            ))}
+            )) : (
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-sm px-3 py-1">
+                  Archives
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => cleanupMutation.mutate()}
+                  disabled={cleanupMutation.isPending}
+                  className="gap-2"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Nettoyer (auto)
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tabs & Bulk Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+          <div className="flex bg-muted p-1 rounded-lg">
+            <Button
+              variant={!isArchived ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setIsArchived(false)}
+              className="text-sm"
+            >
+              Tâches actives
+            </Button>
+            <Button
+              variant={isArchived ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setIsArchived(true)}
+              className="text-sm gap-2"
+            >
+              <Archive className="w-3 h-3" />
+              Archives
+            </Button>
+          </div>
+
+          {selectedTasks.length > 0 && (
+            <div className="flex items-center gap-2 bg-primary/10 p-1 rounded-md px-3 animate-in fade-in zoom-in-95">
+              <span className="text-sm font-medium text-primary mr-2">{selectedTasks.length} sélectionné(s)</span>
+              {!isArchived && (
+                <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => handleBulkAction('archive')}>
+                  <Archive className="w-3 h-3" />
+                  Archiver
+                </Button>
+              )}
+              <Button size="sm" variant="outline" className="h-8 gap-1 border-destructive/20 hover:bg-destructive/10 hover:text-destructive" onClick={() => handleBulkAction('delete')}>
+                <Trash2 className="w-3 h-3" />
+                Supprimer
+              </Button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="select-all"
+              checked={filteredTasks.length > 0 && selectedTasks.length === filteredTasks.length}
+              onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
+            />
+            <label htmlFor="select-all" className="text-sm text-muted-foreground cursor-pointer select-none">
+              Tout sélectionner
+            </label>
           </div>
         </div>
 
@@ -501,16 +637,29 @@ export default function Tasks() {
               return (
                 <div
                   key={task.id}
-                  className="bg-card p-4 rounded-xl border border-border shadow-sm hover:shadow-md transition-all animate-fade-in"
+                  className="bg-card p-4 rounded-xl border border-border shadow-sm hover:shadow-md transition-all animate-fade-in relative group"
                 >
+                  <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity data-[selected=true]:opacity-100" data-selected={selectedTasks.includes(task.id)}>
+                    <Checkbox
+                      checked={selectedTasks.includes(task.id)}
+                      onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
+                    />
+                  </div>
                   <div className="flex items-start gap-4">
+                    <div className="mt-1">
+                      <Checkbox
+                        checked={selectedTasks.includes(task.id)}
+                        onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
+                        className="md:hidden"
+                      />
+                    </div>
                     <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
                       <Icon className="w-5 h-5 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h3 className="font-semibold">{task.title}</h3>
+                          <h3 className="font-semibold pr-8">{task.title}</h3>
                           <p className="text-sm text-muted-foreground">{task.description}</p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -577,6 +726,17 @@ export default function Tasks() {
             })}
           </div>
         )}
+
+        <ConfirmationModal
+          isOpen={isConfirmOpen}
+          onClose={closeConfirm}
+          onConfirm={handleConfirm}
+          title={confirmOptions.title}
+          message={confirmOptions.message}
+          variant={confirmOptions.variant}
+          confirmText={confirmOptions.confirmText}
+          cancelText={confirmOptions.cancelText}
+        />
       </div>
     </DashboardLayout>
   );

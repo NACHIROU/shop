@@ -137,7 +137,15 @@ export interface PaginatedResponse<T> {
   size: number;
   pages: number;
   total_value?: number;
+  total_sales?: number;
+  total_profit?: number;
   total_amount?: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  created_at: string;
 }
 
 export interface InviteLink {

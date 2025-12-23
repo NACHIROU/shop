@@ -34,6 +34,7 @@ class Task(BaseModel):
     status: str  # "in_progress", "in_delivery", "completed", "cancelled"
     date: datetime = Field(default_factory=datetime.utcnow)
     note: Optional[str] = None
+    is_archived: bool = False
     
     # Sale-specific fields
     selling_price: Optional[float] = None  # For "vente" type

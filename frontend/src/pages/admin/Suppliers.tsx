@@ -28,12 +28,15 @@ import { toast } from 'sonner';
 import type { Supplier, SupplierInput } from '@/types';
 import { formatDate, suppliersApi } from '@/services/api';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ConfirmationModal } from '@/components/common/ConfirmationModal';
+import { useConfirmation } from '@/hooks/useConfirmation';
 
 export default function Suppliers() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const { confirm, isOpen: isConfirmOpen, options: confirmOptions, close: closeConfirm, handleConfirm } = useConfirmation();
 
   const { data: supplierList = [], isLoading } = useQuery({
     queryKey: ['suppliers'],
@@ -108,8 +111,13 @@ export default function Suppliers() {
   };
 
   const handleDeleteSupplier = async (id: string) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce fournisseur ?')) return;
-    deleteSupplierMutation.mutate(id);
+    confirm({
+      title: 'Supprimer le fournisseur',
+      message: 'Voulez-vous vraiment supprimer ce fournisseur ?',
+      variant: 'danger',
+      confirmText: 'Supprimer',
+      onConfirm: () => deleteSupplierMutation.mutate(id)
+    });
   };
 
   const SupplierForm = ({ supplier, onSubmit }: { supplier?: Supplier; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void }) => (
@@ -295,6 +303,17 @@ export default function Suppliers() {
             {editingSupplier && <SupplierForm supplier={editingSupplier} onSubmit={handleEditSupplier} />}
           </DialogContent>
         </Dialog>
+
+        <ConfirmationModal
+          isOpen={isConfirmOpen}
+          onClose={closeConfirm}
+          onConfirm={handleConfirm}
+          title={confirmOptions.title}
+          message={confirmOptions.message}
+          variant={confirmOptions.variant}
+          confirmText={confirmOptions.confirmText}
+          cancelText={confirmOptions.cancelText}
+        />
       </div>
     </DashboardLayout>
   );
