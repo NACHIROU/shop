@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.schemas.auth import (
     UserCreate, UserLogin, CollaboratorCreate, AuthResponse, 
     UserResponse, CollaboratorResponse, InviteLinkResponse,
-    ActivateAccountRequest, CollaboratorUpdate
+    ActivateAccountRequest, CollaboratorUpdate, MerchantCreate
 )
 from app.services.auth_service import AuthService
 from app.core.dependencies import get_current_admin, get_current_admin_or_collaborator, get_current_superadmin
@@ -128,7 +128,7 @@ async def change_password(
     return {"message": "Password changed successfully"}
 @router.post("/merchants", response_model=UserResponse)
 async def create_merchant(
-    merchant_data: UserCreate,
+    merchant_data: MerchantCreate,
     current_superadmin: User = Depends(get_current_superadmin)
 ):
     user = await AuthService.create_merchant(merchant_data)

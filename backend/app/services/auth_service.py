@@ -1,6 +1,6 @@
 from app.db.mongo import users_collection
 from app.models.user import User
-from app.schemas.auth import UserCreate, UserLogin, CollaboratorCreate
+from app.schemas.auth import UserCreate, UserLogin, CollaboratorCreate, MerchantCreate
 from app.core.security import hash_password, verify_password
 from app.core.config import settings
 from app.core.jwt import create_access_token, create_refresh_token, verify_token
@@ -255,7 +255,7 @@ class AuthService:
         return users
 
     @staticmethod
-    async def create_merchant(merchant_data: UserCreate) -> User:
+    async def create_merchant(merchant_data: MerchantCreate) -> User:
         # Check if email or phone already exists
         existing = await users_collection.find_one({
             "$or": [

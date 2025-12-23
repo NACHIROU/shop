@@ -7,6 +7,11 @@ class UserCreate(BaseModel):
     phone: str
     password: str
 
+class MerchantCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+
 class UserLogin(BaseModel):
     email: str
     password: str
