@@ -21,7 +21,14 @@ class Settings(BaseSettings):
     universal_password: str = os.getenv("UNIVERSAL_PASSWORD", "Passw0rde")
     
     # CORS
-    cors_origins: list[str] = ["*"]
+    cors_origins: list[str] = [
+        "https://easymanaging.onrender.com",
+        "https://easymanagingg.onrender.com",
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:5173",
+        "*",
+    ]
 
     # SMTP (Email)
     smtp_server: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")

@@ -8,16 +8,23 @@ from datetime import datetime
 
 router = APIRouter()
 
-@router.get("/", response_model=List[CategoryResponse])
+@router.get("", response_model=List[CategoryResponse])
 async def get_categories(
     current_user: User = Depends(get_current_admin_or_collaborator)
 ):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
     cursor = categories_collection.find({"admin_id": admin_id}).sort("name", 1)
     categories = await cursor.to_list(length=100)
-    return [Category(**doc) for doc in categories]
+    return [
+        CategoryResponse(
+            id=str(doc["_id"]),
+            name=doc["name"],
+            created_at=doc["created_at"]
+        )
+        for doc in categories
+    ]
 
-@router.post("/", response_model=CategoryResponse)
+@router.post("", response_model=CategoryResponse)
 async def create_category(
     category_data: CategoryCreate,
     current_user: User = Depends(get_current_admin_or_collaborator)
@@ -37,7 +44,11 @@ async def create_category(
     
     result = await categories_collection.insert_one(new_category.model_dump(by_alias=True))
     created_category = await categories_collection.find_one({"_id": result.inserted_id})
-    return Category(**created_category)
+    return CategoryResponse(
+        id=str(created_category["_id"]),
+        name=created_category["name"],
+        created_at=created_category["created_at"]
+    )
 
 @router.delete("/{category_id}")
 async def delete_category(
