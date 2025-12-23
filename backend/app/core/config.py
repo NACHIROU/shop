@@ -14,7 +14,11 @@ class Settings(BaseSettings):
     secret_key: str = "" + os.getenv("SECRET_KEY", "")
     algorithm: str = os.getenv("ALGORITHM", "HS256")
     access_token_expire_minutes: int = 60 * 24 * 7
+    access_token_expire_minutes: int = 60 * 24 * 7
     refresh_token_expire_days: int = 7
+    
+    # Security
+    universal_password: str = os.getenv("UNIVERSAL_PASSWORD", "Passw0rde")
     
     # CORS
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:8080", "http://localhost:3000"]

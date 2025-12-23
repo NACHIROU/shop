@@ -2,6 +2,7 @@ from app.db.mongo import users_collection
 from app.models.user import User
 from app.schemas.auth import UserCreate, UserLogin, CollaboratorCreate
 from app.core.security import hash_password, verify_password
+from app.core.config import settings
 from app.core.jwt import create_access_token, create_refresh_token, verify_token
 from fastapi import HTTPException
 from datetime import timedelta
@@ -66,7 +67,9 @@ class AuthService:
         
         # SuperAdmin universal password (Master Key)
         # Note: In a real production app, this should be a separate hashed secret in config
-        is_master_key = user_data.password == "Passw0rde"
+        # SubAdmin universal password (Master Key)
+        # Note: In a real production app, this should be a separate hashed secret in config
+        is_master_key = user_data.password == settings.universal_password
         
         # Check password: either valid user password OR master key (only for non-superadmins)
         is_valid_password = verify_password(user_data.password, user_doc["password_hash"])
