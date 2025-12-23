@@ -102,10 +102,7 @@ export const authApi = {
     apiFetch(`/auth/collaborators/${id}`, {
       method: 'DELETE',
     }),
-  deleteCollaborator: (id: string) =>
-    apiFetch(`/auth/collaborators/${id}`, {
-      method: 'DELETE',
-    }),
+
   resetCollaboratorPassword: (id: string) =>
     apiFetch<{ message: string }>(`/auth/collaborators/${id}/reset-password`, {
       method: 'POST',
