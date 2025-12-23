@@ -108,6 +108,10 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  generateMerchantInviteLink: (merchantId: string) =>
+    apiFetch<InviteLink>(`/auth/merchants/${merchantId}/invite-link`, {
+      method: 'POST',
+    }),
   toggleUserStatus: (id: string) =>
     apiFetch<{ message: string; is_active: boolean }>(`/auth/users/${id}/toggle-status`, {
       method: 'POST',

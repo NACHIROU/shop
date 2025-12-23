@@ -67,7 +67,9 @@ async def generate_invite_link(
     """Generate an invite link for a collaborator to activate their account"""
     token = await AuthService.generate_invite_token(collaborator_id)
     # In production, this would be your actual frontend URL
-    invite_url = f"http://localhost:5173/activate?token={token}"
+    # Assuming frontend is on the same domain/port as configured in CORS or env
+    base_url = "https://easymanaging.onrender.com"
+    invite_url = f"{base_url}/activate?token={token}"
     
     return InviteLinkResponse(
         invite_token=token,
@@ -156,6 +158,24 @@ async def get_merchants(current_superadmin: User = Depends(get_current_superadmi
             created_at=m.created_at.isoformat()
         ) for m in merchants
     ]
+
+@router.post("/merchants/{merchant_id}/invite-link", response_model=InviteLinkResponse)
+async def generate_merchant_invite_link(
+    merchant_id: str,
+    current_superadmin: User = Depends(get_current_superadmin)
+):
+    """Generate an invite link for a merchant to activate their account"""
+    token = await AuthService.generate_invite_token(merchant_id)
+    # In production, this would be your actual frontend URL
+    # Assuming frontend is on the same domain/port as configured in CORS or env
+    base_url = "https://easymanaging.onrender.com"  # Or separate frontend URL
+    invite_url = f"{base_url}/activate?token={token}"
+    
+    return InviteLinkResponse(
+        invite_token=token,
+        invite_url=invite_url,
+        collaborator_id=merchant_id
+    )
 
 @router.post("/users/{user_id}/toggle-status")
 async def toggle_user_status(

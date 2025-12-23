@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { UserPlus, Power, Store, Mail, Phone, Calendar, LockKeyhole } from 'lucide-react';
+import { UserPlus, Power, Store, Mail, Phone, Calendar, LockKeyhole, RefreshCcw, Copy } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -32,13 +32,29 @@ export default function MerchantManagement() {
         queryFn: authApi.getMerchants,
     });
 
+    const [inviteLink, setInviteLink] = useState('');
+    const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+
+    const generateLinkMutation = useMutation({
+        mutationFn: authApi.generateMerchantInviteLink,
+        onSuccess: (data) => {
+            setInviteLink(data.invite_url);
+            setInviteDialogOpen(true);
+            toast.success('Lien d\'invitation généré');
+        },
+        onError: (error: any) => {
+            toast.error('Erreur lors de la génération du lien: ' + error.message);
+        }
+    });
+
     const createMerchantMutation = useMutation({
         mutationFn: authApi.createMerchant,
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['merchants'] });
             setIsDialogOpen(false);
             setFormData({ name: '', email: '', phone: '' });
-            toast.success('Marchand créé avec succès. Mot de passe généré automatiquement.');
+            // Auto generate invite link
+            generateLinkMutation.mutate(data.id);
         },
         onError: (error: any) => {
             toast.error('Erreur lors de la création: ' + error.message);
@@ -53,15 +69,10 @@ export default function MerchantManagement() {
         },
     });
 
-    const resetPasswordMutation = useMutation({
-        mutationFn: authApi.resetUserPassword,
-        onSuccess: () => {
-            toast.success('Réinitialisation demandée. L\'utilisateur devra changer son mot de passe.');
-        },
-        onError: (error: any) => {
-            toast.error('Erreur: ' + error.message);
-        }
-    });
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(inviteLink);
+        toast.success('Lien copié !');
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -124,6 +135,34 @@ export default function MerchantManagement() {
                             </form>
                         </DialogContent>
                     </Dialog>
+
+                    {/* Invite Link Dialog */}
+                    <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Lien d'activation généré</DialogTitle>
+                            </DialogHeader>
+                            <div className="flex items-center space-x-2">
+                                <div className="grid flex-1 gap-2">
+                                    <Label htmlFor="link" className="sr-only">
+                                        Lien
+                                    </Label>
+                                    <Input
+                                        id="link"
+                                        defaultValue={inviteLink}
+                                        readOnly
+                                    />
+                                </div>
+                                <Button type="submit" size="sm" className="px-3" onClick={copyToClipboard}>
+                                    <span className="sr-only">Copier</span>
+                                    <Copy className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                                Envoyez ce lien au marchand pour qu'il active son compte et définisse son mot de passe.
+                            </div>
+                        </DialogContent>
+                    </Dialog>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -166,18 +205,20 @@ export default function MerchantManagement() {
 
                                 <div className="pt-4 border-t flex flex-col gap-2">
                                     <div className="flex justify-between items-center">
-                                        <span className="text-xs font-medium text-muted-foreground uppercase">Role</span>
+                                        <span className="text-xs font-medium text-muted-foreground uppercase">Actions</span>
                                         <span className="text-xs bg-muted px-2 py-1 rounded font-mono">MARCHAND</span>
                                     </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-full text-xs gap-2"
-                                        onClick={() => resetPasswordMutation.mutate(merchant.id)}
-                                        disabled={resetPasswordMutation.isPending}
-                                    >
-                                        <LockKeyhole className="h-3 w-3" /> Réinitialiser le mot de passe
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1 text-xs gap-2"
+                                            onClick={() => generateLinkMutation.mutate(merchant.id)}
+                                            disabled={generateLinkMutation.isPending}
+                                        >
+                                            <RefreshCcw className="h-3 w-3" /> Lien d'activation
+                                        </Button>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>

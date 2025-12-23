@@ -13,7 +13,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Plus, Search, Mail, Phone, MoreVertical, User, CheckCircle2, Copy, Check } from 'lucide-react';
+import { Plus, Search, Mail, Phone, MoreVertical, User, CheckCircle2, Copy, Check, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { authApi } from '@/services/api';
 import type { Collaborator } from '@/types';
@@ -94,6 +94,18 @@ export default function Collaborators() {
       toast.success('Collaborateur supprimé avec succès');
     },
     onError: () => toast.error('Erreur lors de la suppression')
+  });
+
+  const regenerateLinkMutation = useMutation({
+    mutationFn: (id: string) => authApi.generateInviteLink(id),
+    onSuccess: (data) => {
+      setInviteLink(data.invite_url);
+      setShowInviteDialog(true);
+      toast.success('Nouveau lien d\'invitation généré');
+    },
+    onError: (error: any) => {
+      toast.error('Erreur lors de la génération du lien: ' + error.message);
+    }
   });
 
   const filteredCollaborators = collaborators
@@ -302,6 +314,9 @@ export default function Collaborators() {
                         onClick={() => handleDeleteCollaborator(collab.id)}
                       >
                         Supprimer
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => regenerateLinkMutation.mutate(collab.id)}>
+                        <RefreshCcw className="mr-2 h-4 w-4" /> Régénérer lien
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
