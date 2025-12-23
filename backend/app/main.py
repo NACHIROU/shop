@@ -25,14 +25,13 @@ async def startup_event():
         await client.admin.command('ping')
         from app.db.mongo import create_indexes
         await create_indexes()
-        print("Connected to MongoDB and indexes created")
-    except Exception as e:
-        print(f"Failed to connect to MongoDB: {e}")
+    except Exception:
+        pass
 
 @app.on_event("shutdown")
 async def shutdown_event():
     client.close()
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"message": "Shop Dashboard API"}

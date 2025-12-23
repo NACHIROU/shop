@@ -7,7 +7,6 @@ class EmailService:
     async def send_report_email(email: EmailStr, subject: str, body: str):
         if not settings.smtp_user or not settings.smtp_password or not (settings.smtp_from or settings.smtp_user):
             # Skip if SMTP not configured correctly
-            print("SMTP not configured, skipping email.")
             return False
             
         conf = ConnectionConfig(

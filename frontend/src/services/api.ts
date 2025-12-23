@@ -19,7 +19,7 @@ import type {
 } from '@/types';
 
 // Base API URL - proxied to backend
-const API_BASE_URL = '/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Generic fetch wrapper with auth
 async function apiFetch<T>(endpoint: string, options?: RequestInit, returnBlob: boolean = false): Promise<T> {
