@@ -34,7 +34,11 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit, returnBlob: 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  // Ensure no double slashes in the final URL
+  const cleanBase = API_BASE_URL.replace(/\/+$/, '');
+  const cleanEndpoint = endpoint.replace(/^\/+/, '');
+
+  const response = await fetch(`${cleanBase}/${cleanEndpoint}`, {
     headers,
     ...options,
   });
