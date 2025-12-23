@@ -69,7 +69,7 @@ async def generate_invite_link(
     token = await AuthService.generate_invite_token(collaborator_id)
     # In production, this would be your actual frontend URL
     # Assuming frontend is on the same domain/port as configured in CORS or env
-    base_url = "https://easymanaging.onrender.com"
+    base_url = "https://easymanagingg.onrender.com"
     invite_url = f"{base_url}/activate?token={token}"
     
     return InviteLinkResponse(
@@ -190,7 +190,7 @@ async def generate_merchant_invite_link(
     token = await AuthService.generate_invite_token(merchant_id)
     # In production, this would be your actual frontend URL
     # Assuming frontend is on the same domain/port as configured in CORS or env
-    base_url = "https://easymanaging.onrender.com"  # Or separate frontend URL
+    base_url = "https://easymanagingg.onrender.com"  # Or separate frontend URL
     invite_url = f"{base_url}/activate?token={token}"
     
     return InviteLinkResponse(
