@@ -76,3 +76,15 @@ class GlobalStats(BaseModel):
     class Config:
         populate_by_name = True
         alias_generator = lambda s: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(s.split('_')))
+
+class CategoryStat(BaseModel):
+    category: str
+    sales: float
+    profit: float
+    count: int
+
+class CategoryStatsResponse(BaseModel):
+    categories: List[CategoryStat]
+    total_sales: float
+    total_profit: float
+    total_count: int

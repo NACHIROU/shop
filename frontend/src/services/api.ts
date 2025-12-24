@@ -267,6 +267,13 @@ export const statsApi = {
     }),
   getReportPdf: (startDate: string, endDate: string): Promise<Blob> =>
     apiFetch(`/analytics/report/pdf?start_date=${startDate}&end_date=${endDate}`, {}, true),
+  getCategoryStats: (startDate?: string, endDate?: string): Promise<any> => {
+    let url = '/analytics/products/category-stats';
+    if (startDate && endDate) {
+      url += `?start_date=${startDate}&end_date=${endDate}`;
+    }
+    return apiFetch(url);
+  },
 };
 
 // ============= Notifications API =============

@@ -35,13 +35,49 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Search, Edit2, Trash2, TrendingUp, Truck, Eye, Loader2, Download, Archive, MoreHorizontal, Settings } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Filter,
+  Download,
+  MoreVertical,
+  Edit,
+  Trash2,
+  Edit2,
+  Truck,
+  TrendingUp,
+  ShoppingBag,
+  FileText,
+  Calendar as CalendarIcon,
+  ChevronDown,
+  LayoutGrid,
+  List as ListIcon,
+  X,
+  History,
+  Tag,
+  Loader2,
+  Trash,
+  Archive,
+  Eye,
+  Settings,
+  BarChart3
+} from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
 import { toast } from 'sonner';
-import { productsApi, suppliersApi, collaboratorsApi, categoriesApi } from '@/services/api';
+import { productsApi, suppliersApi, collaboratorsApi, categoriesApi, statsApi } from '@/services/api';
 
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePrivacy } from '@/contexts/PrivacyContext';
 import { ConfirmationModal } from '@/components/common/ConfirmationModal';
 import { useConfirmation } from '@/hooks/useConfirmation';
@@ -134,12 +170,23 @@ export default function Products() {
     queryFn: () => collaboratorsApi.getAll(),
   });
 
+  // Fetch category stats when viewing sold products
+  const { data: categoryStats } = useQuery({
+    queryKey: ['categoryStats', dateRange],
+    queryFn: () => statsApi.getCategoryStats(
+      dateRange?.from?.toISOString(),
+      dateRange?.to?.toISOString()
+    ),
+    enabled: isVendus,
+  });
+
   const loading = productsLoading || suppliersLoading;
 
   const addProductMutation = useMutation({
     mutationFn: (payload: any) => productsApi.create(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['categoryStats'] });
       toast.success('Produit ajouté avec succès');
       setIsAddDialogOpen(false);
     },
@@ -175,6 +222,7 @@ export default function Products() {
     mutationFn: ({ id, payload }: { id: string; payload: any }) => productsApi.update(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['categoryStats'] });
       toast.success('Produit modifié avec succès');
       setEditingProduct(null);
     },
@@ -207,6 +255,7 @@ export default function Products() {
     mutationFn: (id: string) => productsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['categoryStats'] });
       toast.success('Produit supprimé');
     },
     onError: (error) => {
@@ -220,6 +269,7 @@ export default function Products() {
       productsApi.bulkAction(action, ids),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['categoryStats'] });
       toast.success(`Action groupée (${variables.action}) effectuée`);
       setSelectedProducts([]);
     },
@@ -292,87 +342,130 @@ export default function Products() {
     }
   };
 
-  const ProductForm = ({ product, onSubmit, isSubmitting }: { product?: Product; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void, isSubmitting: boolean }) => (
-    <form onSubmit={onSubmit}>
-      <div className="grid gap-4 py-4">
-        <div className="grid gap-2">
-          <Label htmlFor="name">Nom du produit</Label>
-          <Input id="name" name="name" defaultValue={product?.name} placeholder="iPhone 15 Pro 256GB" required />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="description">Description / Caractéristiques (optionnel)</Label>
-          <Textarea
-            id="description"
-            name="description"
-            defaultValue={product?.description}
-            placeholder="256GB, Bleu Titane, Excellent état..."
-            rows={3}
-          />
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="imei">IMEI</Label>
-          <Input id="imei" name="imei" defaultValue={product?.imei} placeholder="123456789012345" required />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
+  const ProductForm = ({ product, onSubmit, isSubmitting }: { product?: Product; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void, isSubmitting: boolean }) => {
+    const [formName, setFormName] = useState(product?.name || '');
+    const [formCategory, setFormCategory] = useState(product?.category || (categories[0]?.name || "Autres"));
+
+    // Smarter auto-category selection
+    const handleNameChange = (value: string) => {
+      setFormName(value);
+
+      if (!product && value.length >= 2) {
+        const lowerValue = value.toLowerCase();
+
+        // 1. Try to match against category names directly
+        const matchedCategory = categories.find(c =>
+          lowerValue.includes(c.name.toLowerCase()) ||
+          c.name.toLowerCase().includes(lowerValue)
+        );
+
+        if (matchedCategory) {
+          setFormCategory(matchedCategory.name);
+          return;
+        }
+
+        // 2. Try to match against existing product names
+        if (value.length > 3) {
+          const matchingProduct = productList.find(p =>
+            p.name.toLowerCase().includes(lowerValue)
+          );
+
+          if (matchingProduct && matchingProduct.category) {
+            setFormCategory(matchingProduct.category);
+          }
+        }
+      }
+    };
+
+    return (
+      <form onSubmit={onSubmit}>
+        <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="category">Catégorie</Label>
-            <Select name="category" defaultValue={product?.category || (categories[0]?.name || "Autres")}>
+            <Label htmlFor="name">Nom du produit</Label>
+            <Input
+              id="name"
+              name="name"
+              value={formName}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder="iPhone 15 Pro 256GB"
+              required
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="description">Description / Caractéristiques (optionnel)</Label>
+            <Textarea
+              id="description"
+              name="description"
+              defaultValue={product?.description}
+              placeholder="256GB, Bleu Titane, Excellent état..."
+              rows={3}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="imei">IMEI</Label>
+            <Input id="imei" name="imei" defaultValue={product?.imei} placeholder="123456789012345" required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="category">Catégorie</Label>
+              <Select name="category" value={formCategory} onValueChange={setFormCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner une catégorie" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.length > 0 ? (
+                    categories.map(c => (
+                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="Autres">Autres</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="stock">Stock initial</Label>
+              <Input id="stock" name="stock" type="number" defaultValue={product?.stock !== undefined ? product.stock : 1} required />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="supplier">Fournisseur (optionnel)</Label>
+            <Select name="supplier" defaultValue={product?.supplierId || "none"}>
               <SelectTrigger>
-                <SelectValue placeholder="Sélectionner une catégorie" />
+                <SelectValue placeholder="Sélectionner un fournisseur" />
               </SelectTrigger>
               <SelectContent>
-                {categories.length > 0 ? (
-                  categories.map(c => (
-                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="Autres">Autres</SelectItem>
-                )}
+                <SelectItem value="none">Aucun</SelectItem>
+                {suppliers.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="stock">Stock initial</Label>
-            <Input id="stock" name="stock" type="number" defaultValue={product?.stock !== undefined ? product.stock : 1} required />
+            <Label htmlFor="purchasePrice">Prix d'achat (FCFA)</Label>
+            <Input
+              id="purchasePrice"
+              name="purchasePrice"
+              type={isPrivate ? "password" : "number"}
+              defaultValue={product?.purchasePrice}
+              placeholder="650000"
+              required
+            />
           </div>
         </div>
-        <div className="grid gap-2">
-          <Label htmlFor="supplier">Fournisseur (optionnel)</Label>
-          <Select name="supplier" defaultValue={product?.supplierId || "none"}>
-            <SelectTrigger>
-              <SelectValue placeholder="Sélectionner un fournisseur" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Aucun</SelectItem>
-              {suppliers.map(s => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="purchasePrice">Prix d'achat (FCFA)</Label>
-          <Input
-            id="purchasePrice"
-            name="purchasePrice"
-            type={isPrivate ? "password" : "number"}
-            defaultValue={product?.purchasePrice}
-            placeholder="650000"
-            required
-          />
-        </div>
-      </div>
-      <DialogFooter>
-        <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => product ? setEditingProduct(null) : setIsAddDialogOpen(false)}>
-          Annuler
-        </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {product ? 'Modifier' : 'Ajouter'}
-        </Button>
-      </DialogFooter>
-    </form>
-  );
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => product ? setEditingProduct(null) : setIsAddDialogOpen(false)}>
+            Annuler
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {product ? 'Modifier' : 'Ajouter'}
+          </Button>
+        </DialogFooter>
+      </form>
+    );
+  };
 
   return (
     <DashboardLayout>
@@ -432,65 +525,135 @@ export default function Products() {
           </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Dynamic Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-card p-3 rounded-xl border border-border">
-            <p className="text-xs text-muted-foreground mb-1">{isVendus ? "Total vendus" : "Total articles"}</p>
-            <p className="text-xl font-bold">{productsInfiniteData?.pages[0]?.total || 0}</p>
+          <div className="bg-card p-4 rounded-xl border border-border shadow-sm">
+            <p className="text-xs text-muted-foreground mb-1 font-medium">{isVendus ? "Articles Vendus" : "Total Stock"}</p>
+            <p className="text-2xl font-bold">{productsInfiniteData?.pages[0]?.total || 0}</p>
           </div>
-          <div className="bg-card p-3 rounded-xl border border-border">
-            <p className="text-xs text-muted-foreground mb-1">{isVendus ? "Chiffre d'Affaires" : "Valeur Stock"}</p>
-            <p className="text-xl font-bold text-primary">
+          <div className="bg-card p-4 rounded-xl border border-border shadow-sm">
+            <p className="text-xs text-muted-foreground mb-1 font-medium">{isVendus ? "Chiffre d'Affaires" : "Valeur Stock"}</p>
+            <p className="text-2xl font-bold text-primary">
               {isVendus
                 ? formatCurrency(productsInfiniteData?.pages[0]?.total_sales || 0)
                 : (isPrivate ? "••••••" : formatCurrency(stats.totalValue))
               }
             </p>
           </div>
-          {isVendus ? (
-            <div className="bg-card p-3 rounded-xl border border-border">
-              <p className="text-xs text-muted-foreground mb-1">Bénéfice</p>
-              <p className="text-xl font-bold text-success">
-                {isPrivate ? "••••••" : formatCurrency(productsInfiniteData?.pages[0]?.total_profit || 0)}
-              </p>
-            </div>
-          ) : (
-            <div className="bg-card p-3 rounded-xl border border-border">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                <p className="text-xs text-muted-foreground">iPhone</p>
-              </div>
-              <p className="text-xl font-bold">{productList.filter(p => !p.isArchived && p.category === 'iPhone').reduce((acc, p) => acc + p.stock, 0)}</p>
-            </div>
-          )}
-          <div className="bg-card p-3 rounded-xl border border-border">
-            {isVendus ? (
-              // Use a different metric for last card in sold view? Maybe Top Seller? 
-              // For now keep it simple or show Samsung items sold count? 
-              // Let's show count of items sold (quantity) vs transactions? 
-              // Actually sold count is total items. 
-              // Let's create a placeholder or just Total Items again?
-              // Or maybe average cart?
-              // Let's reuse Samsung stock logic but for Sold items of Samsung? 
-              // Let's keep it simple: Samsung Sold.
+
+          {/* Top 2 Categories or Placeholder */}
+          {(() => {
+            const topCategories = isVendus
+              ? (categoryStats?.categories?.slice(0, 2) || [])
+              : categories.slice(0, 2).map(c => ({
+                category: c.name,
+                stock: productList.filter(p => !p.isArchived && p.category === c.name).reduce((acc, p) => acc + p.stock, 0)
+              }));
+
+            return (
               <>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                  <p className="text-xs text-muted-foreground">Samsung (S)</p>
-                </div>
-                <p className="text-xl font-bold">{productList.filter(p => p.isArchived && p.category === 'Samsung').length} <span className="text-xs font-normal text-muted-foreground">affichés</span></p>
+                {topCategories.map((cat, idx) => (
+                  <div key={idx} className="bg-card p-4 rounded-xl border border-border shadow-sm">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className={`w-2 h-2 rounded-full ${idx === 0 ? 'bg-blue-500' : 'bg-orange-500'}`}></div>
+                      <p className="text-xs text-muted-foreground font-medium truncate">{cat.category}</p>
+                    </div>
+                    <p className="text-2xl font-bold">
+                      {isVendus ? (isPrivate ? "•••" : formatCurrency((cat as any).sales)) : (cat as any).stock}
+                      {isVendus && <span className="text-xs font-normal text-muted-foreground ml-1">FCFA</span>}
+                    </p>
+                  </div>
+                ))}
+                {/* Pad with placeholders if less than 2 categories */}
+                {Array.from({ length: Math.max(0, 2 - topCategories.length) }).map((_, i) => (
+                  <div key={`empty-${i}`} className="bg-card p-4 rounded-xl border border-border shadow-sm opacity-50">
+                    <p className="text-xs text-muted-foreground mb-1 font-medium">N/A</p>
+                    <p className="text-2xl font-bold">-</p>
+                  </div>
+                ))}
               </>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                  <p className="text-xs text-muted-foreground">Samsung</p>
-                </div>
-                <p className="text-xl font-bold">{productList.filter(p => !p.isArchived && p.category === 'Samsung').reduce((acc, p) => acc + p.stock, 0)}</p>
-              </>
-            )}
-          </div>
+            );
+          })()}
         </div>
+
+        {/* Category Analytics & Chart - Only show when viewing sold products */}
+        {isVendus && categoryStats && categoryStats.categories && categoryStats.categories.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-card rounded-xl border border-border shadow-sm p-4 md:p-6 animate-fade-in">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Performance par Catégorie
+                </h3>
+              </div>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={categoryStats.categories}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                    <XAxis
+                      dataKey="category"
+                      axisLine={false}
+                      tickLine={false}
+                      fontSize={12}
+                      tick={{ fill: '#6B7280' }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      fontSize={12}
+                      tick={{ fill: '#6B7280' }}
+                      tickFormatter={(value) => `${value / 1000}k`}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      formatter={(value: any) => [formatCurrency(value), 'Ventes']}
+                    />
+                    <Bar
+                      dataKey="sales"
+                      radius={[4, 4, 0, 0]}
+                      barSize={40}
+                    >
+                      {categoryStats.categories.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#3B82F6' : '#60A5FA'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-card rounded-xl border border-border shadow-sm p-4 md:p-6 animate-fade-in">
+              <h3 className="text-lg font-semibold mb-4">Détails des Ventes</h3>
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                {categoryStats.categories.map((cat: any) => (
+                  <div key={cat.category} className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="text-sm font-bold">{cat.category}</p>
+                      <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded-full font-medium">
+                        {cat.count} articles
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">Ventes:</span>
+                      <span className="font-medium text-primary">{isPrivate ? "••••••" : formatCurrency(cat.sales)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Profit:</span>
+                      <span className="font-medium text-success">{isPrivate ? "••••••" : formatCurrency(cat.profit)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-4 border-t border-border">
+                <div className="flex justify-between items-center mb-1">
+                  <p className="text-xs text-muted-foreground">Profit Total</p>
+                  <p className="text-sm font-bold text-success">{isPrivate ? "••••••" : formatCurrency(categoryStats.total_profit)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Search and Filters */}
         <div className="flex flex-col sm:flex-row gap-4">

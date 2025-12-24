@@ -99,14 +99,19 @@ class ProductService:
         # Add date filter
         if start_date and end_date:
             try:
-                # Parse dates - assuming ISO format YYYY-MM-DD
-                start = datetime.strptime(start_date, "%Y-%m-%d")
-                end = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+                # Handle ISO format from frontend (e.g. 2023-10-27T00:00:00.000Z) or YYYY-MM-DD
+                if 'T' in start_date:
+                    start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                    end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                else:
+                    start = datetime.strptime(start_date, "%Y-%m-%d")
+                    end = datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
                 
                 date_field = "sold_at" if is_archived else "created_at"
                 query[date_field] = {"$gte": start, "$lte": end}
-            except ValueError:
+            except Exception as e:
                 # If date parsing fails, ignore or handle error
+                print(f"Date parsing error: {e}")
                 pass
         
         total = await products_collection.count_documents(query)

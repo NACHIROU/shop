@@ -508,3 +508,60 @@ class AnalyticsService:
             "growth": growth,
             "top_merchants": top_merchants
         }
+
+    @staticmethod
+    async def get_category_stats(admin_id: str, start_date: datetime = None, end_date: datetime = None) -> dict:
+        """
+        Get sales and profit statistics grouped by product category.
+        Returns category-wise breakdown for sold products.
+        """
+        from app.db.mongo import products_collection
+        
+        # Build match filter
+        match_filter = {"admin_id": admin_id, "is_archived": True}  # Sold products
+        
+        if start_date and end_date:
+            match_filter["sold_at"] = {"$gte": start_date, "$lt": end_date}
+        
+        # Aggregation pipeline
+        pipeline = [
+            {"$match": match_filter},
+            {"$group": {
+                "_id": "$category",
+                "total_sales": {"$sum": "$selling_price"},
+                "total_profit": {"$sum": {"$subtract": ["$selling_price", "$purchase_price"]}},
+                "count": {"$sum": 1}
+            }},
+            {"$sort": {"total_sales": -1}}
+        ]
+        
+        results = await products_collection.aggregate(pipeline).to_list(length=100)
+        
+        # Format results
+        categories = []
+        total_sales = 0
+        total_profit = 0
+        total_count = 0
+        
+        for r in results:
+            sales = r.get("total_sales", 0) or 0
+            profit = r.get("total_profit", 0) or 0
+            count = r.get("count", 0)
+            
+            categories.append({
+                "category": r["_id"] or "Non catégorisé",
+                "sales": sales,
+                "profit": profit,
+                "count": count
+            })
+            
+            total_sales += sales
+            total_profit += profit
+            total_count += count
+        
+        return {
+            "categories": categories,
+            "total_sales": total_sales,
+            "total_profit": total_profit,
+            "total_count": total_count
+        }

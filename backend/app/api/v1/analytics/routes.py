@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, Body
-from app.schemas.analytics import DailyOverview, MonthlyStats, DailyStats, GlobalStats
+from app.schemas.analytics import DailyOverview, MonthlyStats, DailyStats, GlobalStats, CategoryStatsResponse
 from app.services.analytics_service import AnalyticsService
 from app.services.email_service import EmailService
 from app.core.dependencies import get_current_admin_or_collaborator, get_current_superadmin
@@ -92,3 +92,19 @@ async def get_treasury_report_pdf(
             "Content-Disposition": f"attachment; filename={filename}"
         }
     )
+
+@router.get("/products/category-stats", response_model=CategoryStatsResponse)
+async def get_category_stats(
+    start_date: str = Query(None),
+    end_date: str = Query(None),
+    current_user: User = Depends(get_current_admin_or_collaborator)
+):
+    admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
+    
+    start = None
+    end = None
+    if start_date and end_date:
+        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+    
+    return await AnalyticsService.get_category_stats(admin_id, start, end)
