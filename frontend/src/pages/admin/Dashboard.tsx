@@ -83,12 +83,12 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <StatsCard title="Ventes du jour" value={formatCurrency(dailyStats?.sales || 0)} change="Chiffre d'affaires" icon={TrendingUp} variant="primary" />
-              <StatsCard title="Achats du jour" value={isPrivate ? "••••••" : formatCurrency(dailyStats?.purchases || 0)} change="Investissement" icon={Package} variant="accent" />
-              <StatsCard title="Profit Opérationnel" value={isPrivate ? "••••••" : formatCurrency(dailyStats?.profit || 0)} change="Bénéfice brut" changeType="positive" icon={TrendingUp} variant="success" />
-              <StatsCard title="Valeur Stock" value={isPrivate ? "••••••" : formatCurrency(dailyStats?.totalValue || 0)} change="Capital immobilisé" icon={Package} variant="warning" />
-              <StatsCard title="Solde Global" value={isPrivate ? "••••••" : formatCurrency(dailyStats?.globalBalance || 0)} change="Flux de trésorerie" changeType={(dailyStats?.globalBalance || 0) >= 0 ? "positive" : "negative"} icon={Package} />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+              <StatsCard title="Ventes" value={formatCurrency(dailyStats?.sales || 0)} change="Du jour" icon={TrendingUp} variant="primary" />
+              <StatsCard title="Achats" value={isPrivate ? "••••••" : formatCurrency(dailyStats?.purchases || 0)} change="Du jour" icon={Package} variant="accent" />
+              <StatsCard title="Profit" value={isPrivate ? "••••••" : formatCurrency(dailyStats?.profit || 0)} change="Opérationnel" changeType="positive" icon={TrendingUp} variant="success" />
+              <StatsCard title="Stock" value={isPrivate ? "••••••" : formatCurrency(dailyStats?.totalValue || 0)} change="Valeur" icon={Package} variant="warning" />
+              <StatsCard title="Solde" value={isPrivate ? "••••••" : formatCurrency(dailyStats?.globalBalance || 0)} change="Global" changeType={(dailyStats?.globalBalance || 0) >= 0 ? "positive" : "negative"} icon={Package} className="col-span-2 lg:col-span-1" />
             </div>
 
             <div className="bg-card p-6 rounded-xl border border-border shadow-sm animate-fade-in">

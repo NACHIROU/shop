@@ -1,4 +1,4 @@
-import { Bell, Search, User, LogOut, CheckCheck, Eye, EyeOff } from 'lucide-react';
+import { Bell, Search, User, LogOut, CheckCheck, Eye, EyeOff, Smartphone } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { usePrivacy } from '@/contexts/PrivacyContext';
@@ -28,7 +28,15 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 bg-card border-b border-border px-6 flex items-center justify-end sticky top-0 z-10">
+    <header className="h-16 bg-card border-b border-border px-4 md:px-6 flex items-center justify-between md:justify-end sticky top-0 z-10 w-full">
+      {/* Brand logo for mobile (hidden on desktop where sidebar is visible) */}
+      <div className="flex items-center gap-2 md:hidden">
+        <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shadow-sm">
+          <Smartphone className="w-4 h-4 text-primary-foreground" />
+        </div>
+        <span className="font-bold text-sm text-primary tracking-tight">EasyManaging</span>
+      </div>
+
       {/* Right side */}
       <div className="flex items-center gap-4">
         {/* Privacy Toggle */}
@@ -114,7 +122,7 @@ export function Header() {
                   {user?.name?.charAt(0)?.toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-sm">{user?.name || 'Utilisateur'}</span>
+              <span className="text-sm hidden sm:inline-block">{user?.name || 'Utilisateur'}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

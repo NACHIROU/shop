@@ -8,6 +8,7 @@ interface StatsCardProps {
   changeType?: 'positive' | 'negative' | 'neutral';
   icon: LucideIcon;
   variant?: 'default' | 'primary' | 'success' | 'warning' | 'accent';
+  className?: string;
 }
 
 const variantStyles = {
@@ -26,13 +27,14 @@ const iconVariantStyles = {
   accent: 'bg-accent-foreground/20 text-accent-foreground',
 };
 
-export function StatsCard({ 
-  title, 
-  value, 
-  change, 
+export function StatsCard({
+  title,
+  value,
+  change,
   changeType = 'neutral',
-  icon: Icon, 
-  variant = 'default' 
+  icon: Icon,
+  variant = 'default',
+  className
 }: StatsCardProps) {
   const changeColors = {
     positive: 'text-success',
@@ -43,7 +45,7 @@ export function StatsCard({
   const isColored = variant !== 'default';
 
   return (
-    <div 
+    <div
       className={cn(
         "p-6 rounded-xl border border-border shadow-sm transition-all duration-200 hover:shadow-md animate-fade-in",
         variantStyles[variant]

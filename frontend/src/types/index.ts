@@ -63,6 +63,7 @@ export interface Task {
   assignedToName: string;
   productId?: string;
   productName?: string;
+  productImei?: string;
   quantity?: number;
   clientName?: string;
   clientPhone?: string;

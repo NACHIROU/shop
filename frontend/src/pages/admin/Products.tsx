@@ -76,6 +76,7 @@ import {
   Cell
 } from 'recharts';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { productsApi, suppliersApi, collaboratorsApi, categoriesApi, statsApi } from '@/services/api';
 
 import { usePrivacy } from '@/contexts/PrivacyContext';
@@ -179,6 +180,54 @@ export default function Products() {
     ),
     enabled: isVendus,
   });
+
+  // displayProducts with grouping logic
+  const displayProducts = useMemo(() => {
+    let items = productList;
+
+    if (viewMode === 'grouped') {
+      const groups = productList.reduce((acc: any, p) => {
+        const key = `${p.name}-${p.category}`;
+        if (!acc[key]) {
+          acc[key] = { ...p, stock: 0, count: 0 };
+        }
+        acc[key].stock += p.stock;
+        acc[key].count += 1;
+        return acc;
+      }, {});
+      items = Object.values(groups);
+    } else if (viewMode === 'smart') {
+      const smartGroups = productList.reduce((acc: any, p) => {
+        const storageMatch = p.name.match(/(\d+)\s*(GB|TB)/i) || (p.description || '').match(/(\d+)\s*(GB|TB)/i);
+        const storage = storageMatch ? storageMatch[0].toUpperCase().replace(' ', '') : 'Standard';
+
+        let model = p.name;
+        const modelMatch = p.name.match(/(iPhone\s*\d+\s*(Pro\s*Max|Pro|Plus|Mini|SE)?)|(Samsung\s*[S|A|Z]\d+\s*[+]?)/i);
+        if (modelMatch) {
+          model = modelMatch[0].trim();
+        } else {
+          model = p.name.replace(/(\d+)\s*(GB|TB)/i, '').trim();
+        }
+
+        const key = `${model}-${storage}`;
+        if (!acc[key]) {
+          acc[key] = {
+            id: key,
+            name: `${model} ${storage !== 'Standard' ? storage : ''}`,
+            category: p.category,
+            stock: 0,
+            count: 0,
+            purchasePrice: p.purchasePrice,
+          };
+        }
+        acc[key].stock += p.stock;
+        acc[key].count += 1;
+        return acc;
+      }, {});
+      items = Object.values(smartGroups);
+    }
+    return items;
+  }, [productList, viewMode]);
 
   const loading = productsLoading || suppliersLoading;
 
@@ -760,88 +809,41 @@ export default function Products() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[50px]">
-                        <Checkbox
-                          checked={productList.length > 0 && selectedProducts.length === productList.length}
-                          onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
-                        />
-                      </TableHead>
-                      <TableHead>Produit</TableHead>
-                      {(viewMode === 'detailed') && <TableHead>IMEI</TableHead>}
-                      <TableHead>Catégorie</TableHead>
-                      {isVendus ? (
-                        <>
-                          <TableHead>Client</TableHead>
-                          <TableHead>Vendu par</TableHead>
-                          <TableHead className="text-right">Prix de vente</TableHead>
-                          <TableHead className="text-right">Date</TableHead>
-                        </>
-                      ) : (
-                        <>
-                          {(viewMode === 'detailed') && <TableHead>Fournisseur</TableHead>}
-                          <TableHead className="text-right">Prix d'achat</TableHead>
-                          <TableHead className="text-center">Stock</TableHead>
-                        </>
-                      )}
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(() => {
-                      let displayProducts = productList;
-
-                      if (viewMode === 'grouped') {
-                        const groups = productList.reduce((acc: any, p) => {
-                          const key = `${p.name}-${p.category}`;
-                          if (!acc[key]) {
-                            acc[key] = { ...p, stock: 0, count: 0 };
-                          }
-                          acc[key].stock += p.stock;
-                          acc[key].count += 1;
-                          return acc;
-                        }, {});
-                        displayProducts = Object.values(groups);
-                      } else if (viewMode === 'smart') {
-                        // Smart grouping logic: Extract Model and Storage
-                        const smartGroups = productList.reduce((acc: any, p) => {
-                          // Extract storage (64GB, 128GB, etc.)
-                          const storageMatch = p.name.match(/(\d+)\s*(GB|TB)/i) || (p.description || '').match(/(\d+)\s*(GB|TB)/i);
-                          const storage = storageMatch ? storageMatch[0].toUpperCase().replace(' ', '') : 'Standard';
-
-                          // Extract base model (e.g. iPhone 15, Samsung S24)
-                          let model = p.name;
-                          const modelMatch = p.name.match(/(iPhone\s*\d+\s*(Pro\s*Max|Pro|Plus|Mini|SE)?)|(Samsung\s*[S|A|Z]\d+\s*[+]?)/i);
-                          if (modelMatch) {
-                            model = modelMatch[0].trim();
-                          } else {
-                            // Fallback to name without storage
-                            model = p.name.replace(/(\d+)\s*(GB|TB)/i, '').trim();
-                          }
-
-                          const key = `${model}-${storage}`;
-                          if (!acc[key]) {
-                            acc[key] = {
-                              id: key,
-                              name: `${model} ${storage !== 'Standard' ? storage : ''}`,
-                              category: p.category,
-                              stock: 0,
-                              count: 0,
-                              purchasePrice: p.purchasePrice, // Use as base/average
-                            };
-                          }
-                          acc[key].stock += p.stock;
-                          acc[key].count += 1;
-                          return acc;
-                        }, {});
-                        displayProducts = Object.values(smartGroups);
-                      }
-
-                      return displayProducts.map((product: any) => (
-                        <TableRow key={product.id}>
+              <div className="space-y-4 pb-20 md:pb-0">
+                {/* Desktop Table View */}
+                <div className="hidden md:block bg-card rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="w-[50px]">
+                          <Checkbox
+                            checked={productList.length > 0 && selectedProducts.length === productList.length}
+                            onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
+                          />
+                        </TableHead>
+                        <TableHead className="font-bold">Produit</TableHead>
+                        {(viewMode === 'detailed') && <TableHead className="font-bold">IMEI</TableHead>}
+                        <TableHead className="font-bold">Catégorie</TableHead>
+                        {isVendus ? (
+                          <>
+                            <TableHead className="font-bold">Client</TableHead>
+                            <TableHead className="font-bold">Vendu par</TableHead>
+                            <TableHead className="text-right font-bold">Prix de vente</TableHead>
+                            <TableHead className="text-right font-bold">Date</TableHead>
+                          </>
+                        ) : (
+                          <>
+                            {(viewMode === 'detailed') && <TableHead className="font-bold">Fournisseur</TableHead>}
+                            <TableHead className="text-right font-bold">Prix d'achat</TableHead>
+                            <TableHead className="text-center font-bold">Stock</TableHead>
+                          </>
+                        )}
+                        <TableHead className="text-right font-bold">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {displayProducts.map((product: any) => (
+                        <TableRow key={product.id} className="hover:bg-muted/30 transition-colors">
                           <TableCell>
                             <Checkbox
                               checked={selectedProducts.includes(product.id)}
@@ -849,32 +851,34 @@ export default function Products() {
                             />
                           </TableCell>
                           <TableCell className="font-medium">
-                            {product.name}
-                            {viewMode !== 'detailed' && product.count > 1 && (
-                              <span className="text-xs text-muted-foreground ml-2">
-                                ({product.count} variations)
-                              </span>
-                            )}
+                            <div className="flex flex-col">
+                              <span>{product.name}</span>
+                              {viewMode !== 'detailed' && product.count > 1 && (
+                                <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                                  {product.count} variations
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
-                          {viewMode === 'detailed' && <TableCell className="font-mono text-sm">{product.imei}</TableCell>}
+                          {viewMode === 'detailed' && <TableCell className="font-mono text-xs text-muted-foreground">{product.imei}</TableCell>}
                           <TableCell>
-                            <Badge variant="secondary">{product.category}</Badge>
+                            <Badge variant="outline" className="font-normal">{product.category}</Badge>
                           </TableCell>
                           {isVendus ? (
                             <>
-                              <TableCell>{product.clientName || '-'}</TableCell>
+                              <TableCell className="text-xs">{product.clientName || '-'}</TableCell>
                               <TableCell className="text-xs">{product.soldBy || '-'}</TableCell>
-                              <TableCell className="text-right font-medium text-success">{formatCurrency(product.sellingPrice || 0)}</TableCell>
+                              <TableCell className="text-right font-bold text-success">{formatCurrency(product.sellingPrice || 0)}</TableCell>
                               <TableCell className="text-right text-xs text-muted-foreground">
                                 {product.soldAt ? new Date(product.soldAt).toLocaleDateString('fr-BJ') : '-'}
                               </TableCell>
                             </>
                           ) : (
                             <>
-                              {viewMode === 'detailed' && (
+                              {(viewMode === 'detailed') && (
                                 <TableCell>
                                   {product.supplierName ? (
-                                    <div className="flex items-center gap-1 text-sm">
+                                    <div className="flex items-center gap-1 text-xs">
                                       <Truck className="w-3 h-3 text-muted-foreground" />
                                       {product.supplierName}
                                     </div>
@@ -883,29 +887,37 @@ export default function Products() {
                                   )}
                                 </TableCell>
                               )}
-                              <TableCell className="text-right">
+                              <TableCell className="text-right font-medium">
                                 {isPrivate ? "••••••" : formatCurrency(product.purchasePrice)}
                               </TableCell>
                               <TableCell className="text-center">
-                                <Badge variant={product.stock <= 5 ? 'destructive' : 'default'}>
+                                <Badge
+                                  variant={product.stock <= 5 ? 'destructive' : 'default'}
+                                  className={cn(
+                                    "min-w-[2rem] justify-center",
+                                    product.stock > 0 && product.stock <= 5 && "bg-orange-500 hover:bg-orange-600"
+                                  )}
+                                >
                                   {product.stock}
                                 </Badge>
                               </TableCell>
                             </>
                           )}
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1">
                               {product.description && (
                                 <Popover>
                                   <PopoverTrigger asChild>
-                                    <Button variant="ghost" size="icon">
-                                      <Eye className="w-4 h-4 text-blue-500" />
+                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                      <Eye className="w-4 h-4 text-primary" />
                                     </Button>
                                   </PopoverTrigger>
                                   <PopoverContent className="w-80">
                                     <div className="space-y-2">
-                                      <h4 className="font-medium leading-none">Description</h4>
-                                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                      <h4 className="font-bold text-sm flex items-center gap-2">
+                                        <FileText className="w-4 h-4" /> Description
+                                      </h4>
+                                      <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
                                         {product.description}
                                       </p>
                                     </div>
@@ -914,12 +926,13 @@ export default function Products() {
                               )}
                               {viewMode === 'detailed' && (
                                 <>
-                                  <Button variant="ghost" size="icon" onClick={() => setEditingProduct(product)}>
-                                    <Edit2 className="w-4 h-4" />
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingProduct(product)}>
+                                    <Edit2 className="w-4 h-4 text-muted-foreground" />
                                   </Button>
                                   <Button
                                     variant="ghost"
                                     size="icon"
+                                    className="h-8 w-8"
                                     disabled={deleteProductMutation.isPending}
                                     onClick={() => handleDeleteProduct(product.id)}
                                   >
@@ -930,10 +943,131 @@ export default function Products() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ));
-                    })()}
-                  </TableBody>
-                </Table>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="grid grid-cols-1 gap-4 md:hidden">
+                  {displayProducts.map((product: any) => (
+                    <div
+                      key={product.id}
+                      className="bg-card p-4 rounded-xl border border-border shadow-sm active:scale-[0.98] transition-all animate-fade-in relative group"
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex gap-3">
+                          <Checkbox
+                            checked={selectedProducts.includes(product.id)}
+                            onCheckedChange={(checked) => handleSelectProduct(product.id, checked as boolean)}
+                            className="mt-1"
+                          />
+                          <div>
+                            <h3 className="font-bold text-base leading-tight">{product.name}</h3>
+                            {viewMode === 'detailed' && product.imei && (
+                              <p className="text-xs font-mono text-muted-foreground mt-1">IMEI: {product.imei}</p>
+                            )}
+                            {viewMode !== 'detailed' && product.count > 1 && (
+                              <Badge variant="secondary" className="mt-1 h-5 text-[10px] uppercase font-bold">
+                                {product.count} variations
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          {!isVendus && (
+                            <Badge
+                              variant={product.stock <= 5 ? 'destructive' : 'default'}
+                              className={cn(
+                                "shadow-sm",
+                                product.stock > 0 && product.stock <= 5 && "bg-orange-500"
+                              )}
+                            >
+                              {product.stock} en stock
+                            </Badge>
+                          )}
+                          {isVendus && (
+                            <Badge className="bg-success text-success-foreground shadow-sm">Vendu</Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 my-4 py-4 border-y border-border/50">
+                        <div>
+                          <p className="text-[10px] uppercase text-muted-foreground font-bold mb-1">
+                            {isVendus ? "Prix de vente" : "Prix d'achat"}
+                          </p>
+                          <p className={cn(
+                            "font-bold text-sm",
+                            isVendus ? "text-success" : "text-foreground"
+                          )}>
+                            {isVendus ? formatCurrency(product.sellingPrice || 0) : (isPrivate ? "••••••" : formatCurrency(product.purchasePrice))}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase text-muted-foreground font-bold mb-1">Catégorie</p>
+                          <p className="text-sm font-medium">{product.category}</p>
+                        </div>
+                        {isVendus && (
+                          <>
+                            <div>
+                              <p className="text-[10px] uppercase text-muted-foreground font-bold mb-1">Vendu par</p>
+                              <p className="text-sm font-medium truncate">{product.soldBy || 'N/A'}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase text-muted-foreground font-bold mb-1">Date</p>
+                              <p className="text-sm font-medium">
+                                {product.soldAt ? new Date(product.soldAt).toLocaleDateString('fr-BJ') : 'N/A'}
+                              </p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {product.description && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8 gap-2 px-3">
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span className="text-xs">Détails</span>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[calc(100vw-2rem)] mx-4">
+                                <div className="space-y-2">
+                                  <h4 className="font-bold">Description</h4>
+                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                                    {product.description}
+                                  </p>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {viewMode === 'detailed' && (
+                            <>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingProduct(product)}>
+                                <Edit2 className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                disabled={deleteProductMutation.isPending}
+                                onClick={() => handleDeleteProduct(product.id)}
+                              >
+                                {deleteProductMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4 text-destructive" />}
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Load More Button */}

@@ -631,44 +631,49 @@ export default function Tasks() {
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3 md:space-y-4 pb-20 md:pb-6">
             {filteredTasks.map((task) => {
               const Icon = typeIcons[task.type as keyof typeof typeIcons] || Clock;
               return (
                 <div
                   key={task.id}
-                  className="bg-card p-4 rounded-xl border border-border shadow-sm hover:shadow-md transition-all animate-fade-in relative group"
+                  className="bg-card p-3 md:p-4 rounded-xl border border-border shadow-sm hover:shadow-md transition-all animate-fade-in relative group active:scale-[0.99]"
                 >
-                  <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity data-[selected=true]:opacity-100" data-selected={selectedTasks.includes(task.id)}>
+                  <div className="absolute top-3 right-3 md:top-4 md:right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity data-[selected=true]:opacity-100" data-selected={selectedTasks.includes(task.id)}>
                     <Checkbox
                       checked={selectedTasks.includes(task.id)}
                       onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
                     />
                   </div>
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1">
+                  <div className="flex items-start gap-3 md:gap-4">
+                    <div className="mt-1 flex flex-col gap-2">
                       <Checkbox
                         checked={selectedTasks.includes(task.id)}
                         onCheckedChange={(checked) => handleSelectTask(task.id, checked as boolean)}
                         className="md:hidden"
                       />
-                    </div>
-                    <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-                      <Icon className="w-5 h-5 text-muted-foreground" />
+                      <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
+                      </div>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-semibold pr-8">{task.title}</h3>
-                          <p className="text-sm text-muted-foreground">{task.description}</p>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-sm md:text-base pr-6 truncate">{task.title}</h3>
+                          <p className="text-xs md:text-sm text-muted-foreground line-clamp-2 mt-0.5">{task.description}</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className={cn("text-xs", getStatusColor(task.status))}>
-                            {getStatusLabel(task.status)}
+                        <div className="flex items-center gap-1 md:gap-2">
+                          <Badge className={cn("text-[10px] md:text-xs px-1.5 py-0 md:px-2 md:py-0.5 whitespace-nowrap", getStatusColor(task.status))}>
+                            <span className="hidden sm:inline">{getStatusLabel(task.status)}</span>
+                            <span className="sm:hidden">
+                              {task.status === 'completed' ? '✓' :
+                                task.status === 'in_progress' ? '⏳' :
+                                  task.status === 'in_delivery' ? '🚚' : '✕'}
+                            </span>
                           </Badge>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
                                 <MoreVertical className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -686,37 +691,38 @@ export default function Tasks() {
                                 Marquer annulée
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                className="text-destructive"
+                                className="text-destructive font-bold"
                                 onClick={() => handleDeleteTask(task.id)}
                               >
+                                <Trash2 className="w-4 h-4 mr-2" />
                                 Supprimer
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-muted-foreground">
+
+                      <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-3 text-[10px] md:text-sm text-muted-foreground pt-3 border-t border-border/50">
                         <span className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
+                          <Calendar className="w-3 h-3 md:w-4 md:h-4 text-primary" />
                           {formatDate(task.date)}
                         </span>
                         {task.assignedToName && (
                           <span className="flex items-center gap-1">
-                            <Users className="w-4 h-4" />
-                            {task.assignedToName}
+                            <Users className="w-3 h-3 md:w-4 md:h-4" />
+                            <span className="max-w-[80px] md:max-w-none truncate">{task.assignedToName}</span>
                           </span>
                         )}
-                        <Badge variant="secondary">{getTaskTypeLabel(task.type)}</Badge>
+                        <Badge variant="outline" className="text-[10px] h-5">{getTaskTypeLabel(task.type)}</Badge>
+
                         {task.sellingPrice && (
-                          <span className="text-success font-medium">{task.sellingPrice} FCFA</span>
+                          <span className="text-success font-bold">{task.sellingPrice.toLocaleString()} FCFA</span>
                         )}
+
                         {task.productImei && (
-                          <span className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded text-xs font-mono">
+                          <span className="flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">
                             IMEI: {task.productImei}
                           </span>
-                        )}
-                        {task.client && (
-                          <span>Client: {task.client}</span>
                         )}
                       </div>
                     </div>

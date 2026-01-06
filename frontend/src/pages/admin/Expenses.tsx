@@ -29,8 +29,9 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Search, Edit2, Trash2, Receipt, TrendingDown } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Receipt, TrendingDown, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import type { Expense, ExpenseCategory } from '@/types';
 import { formatCurrency, getExpenseCategoryLabel, formatDate, expensesApi, statsApi } from '@/services/api';
 import { PageLoader } from '@/components/ui/loader';
@@ -288,56 +289,110 @@ export default function Expenses() {
             </Button>
           </div>
         ) : (
-          <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Catégorie</TableHead>
-                  <TableHead>Note</TableHead>
-                  <TableHead className="text-right">Montant</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {expenseList.map((expense) => (
-                  <TableRow key={expense.id}>
-                    <TableCell>
-                      <Badge variant="secondary" className="font-mono">{formatDate(expense.date)}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getCategoryColor(expense.category)}>
+          <div className="space-y-4 pb-20 md:pb-0">
+            {/* Desktop Table */}
+            <div className="hidden md:block bg-card rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-bold">Date</TableHead>
+                    <TableHead className="font-bold">Catégorie</TableHead>
+                    <TableHead className="font-bold">Note</TableHead>
+                    <TableHead className="text-right font-bold">Montant</TableHead>
+                    <TableHead className="text-right font-bold">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {expenseList.map((expense) => (
+                    <TableRow key={expense.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell>
+                        <Badge variant="secondary" className="font-mono">{formatDate(expense.date)}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={cn("font-normal", getCategoryColor(expense.category))}>
+                          {getExpenseCategoryLabel(expense.category)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {expense.note ? (
+                          <span className="text-sm text-muted-foreground line-clamp-1">{expense.note}</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-destructive font-mono">
+                        -{formatCurrency(expense.amount)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingExpense(expense)}>
+                            <Edit2 className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleDeleteExpense(expense.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {expenseList.map((expense) => (
+                <div
+                  key={expense.id}
+                  className="bg-card p-4 rounded-xl border border-border shadow-sm active:scale-[0.98] transition-all animate-fade-in"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex flex-col gap-1">
+                      <p className="text-[10px] uppercase text-muted-foreground font-bold leading-tight">
+                        {formatDate(expense.date)}
+                      </p>
+                      <Badge className={cn("w-fit mt-1 h-5 text-[10px] font-bold uppercase", getCategoryColor(expense.category))}>
                         {getExpenseCategoryLabel(expense.category)}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {expense.note ? (
-                        <span className="text-sm text-muted-foreground line-clamp-1">{expense.note}</span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-bold text-destructive font-mono">
+                    </div>
+                    <p className="text-lg font-bold text-destructive font-mono">
                       -{formatCurrency(expense.amount)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => setEditingExpense(expense)}>
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteExpense(expense.id)}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </p>
+                  </div>
+
+                  {expense.note && (
+                    <p className="text-sm text-muted-foreground mb-4 line-clamp-2 italic">
+                      "{expense.note}"
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/50">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-2 text-xs"
+                      onClick={() => setEditingExpense(expense)}
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      Modifier
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => handleDeleteExpense(expense.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

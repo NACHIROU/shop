@@ -21,6 +21,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Search, Eye, Loader2, Package } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { productsApi } from '@/services/api';
 import {
     Popover,
@@ -119,56 +120,116 @@ export default function CollaboratorProducts() {
                         <p className="text-muted-foreground">Il n'y a pas encore de produits dans cette catégorie.</p>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Produit</TableHead>
-                                        <TableHead>IMEI</TableHead>
-                                        <TableHead>Catégorie</TableHead>
-                                        <TableHead className="text-center">Stock</TableHead>
-                                        <TableHead className="text-right">Détails</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {productList.map((product: any) => (
-                                        <TableRow key={product.id}>
-                                            <TableCell className="font-medium">{product.name}</TableCell>
-                                            <TableCell className="font-mono text-sm">{product.imei}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="secondary">{product.category}</Badge>
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <Badge variant={product.stock <= 0 ? 'destructive' : 'default'}>
-                                                    {product.stock}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    {product.description && (
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <Button variant="ghost" size="icon">
-                                                                    <Eye className="w-4 h-4 text-blue-500" />
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-80">
-                                                                <div className="space-y-2">
-                                                                    <h4 className="font-medium leading-none">Description</h4>
-                                                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                                                        {product.description}
-                                                                    </p>
-                                                                </div>
-                                                            </PopoverContent>
-                                                        </Popover>
-                                                    )}
-                                                </div>
-                                            </TableCell>
+                    <>
+                        <div className="space-y-4 pb-20 md:pb-0"> {/* Extra bottom space for mobile nav */}
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block bg-card rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in transition-all">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50">
+                                            <TableHead className="font-bold">Produit</TableHead>
+                                            <TableHead className="font-bold">IMEI</TableHead>
+                                            <TableHead className="font-bold">Catégorie</TableHead>
+                                            <TableHead className="text-center font-bold">Stock</TableHead>
+                                            <TableHead className="text-right font-bold">Actions</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {productList.map((product: any) => (
+                                            <TableRow key={product.id} className="hover:bg-muted/30 transition-colors">
+                                                <TableCell className="font-semibold">{product.name}</TableCell>
+                                                <TableCell className="font-mono text-xs text-muted-foreground">{product.imei}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline" className="font-normal">{product.category}</Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge
+                                                        variant={product.stock <= 0 ? 'destructive' : 'default'}
+                                                        className={cn(
+                                                            "min-w-8 justify-center shadow-sm",
+                                                            product.stock > 0 && product.stock <= 2 && "bg-orange-500 hover:bg-orange-600"
+                                                        )}
+                                                    >
+                                                        {product.stock}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {product.description && (
+                                                            <Popover>
+                                                                <PopoverTrigger asChild>
+                                                                    <Button variant="ghost" size="icon" className="hover:bg-blue-50">
+                                                                        <Eye className="w-4 h-4 text-blue-500" />
+                                                                    </Button>
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-80">
+                                                                    <div className="space-y-2">
+                                                                        <h4 className="font-medium flex items-center gap-2">
+                                                                            <Package className="w-4 h-4" /> Description
+                                                                        </h4>
+                                                                        <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                                                                            {product.description}
+                                                                        </p>
+                                                                    </div>
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            {/* Mobile Card View */}
+                            <div className="grid grid-cols-1 gap-4 md:hidden">
+                                {productList.map((product: any) => (
+                                    <div
+                                        key={product.id}
+                                        className="bg-card p-4 rounded-xl border border-border shadow-sm active:scale-[0.98] transition-transform animate-fade-in"
+                                    >
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div>
+                                                <h3 className="font-bold text-base leading-tight">{product.name}</h3>
+                                                <p className="text-xs font-mono text-muted-foreground mt-1">IMEI: {product.imei || 'N/A'}</p>
+                                            </div>
+                                            <Badge
+                                                variant={product.stock <= 0 ? 'destructive' : 'default'}
+                                                className={cn(
+                                                    "shadow-sm",
+                                                    product.stock > 0 && product.stock <= 2 && "bg-orange-500"
+                                                )}
+                                            >
+                                                {product.stock} en stock
+                                            </Badge>
+                                        </div>
+                                        <div className="flex items-center justify-between mt-4">
+                                            <Badge variant="secondary" className="px-2 py-0.5 text-[10px] uppercase tracking-wider font-semibold">
+                                                {product.category}
+                                            </Badge>
+                                            {product.description && (
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="outline" size="sm" className="h-8 gap-2 px-3">
+                                                            <Eye className="w-3.5 h-3.5" />
+                                                            <span className="text-xs">Détails</span>
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-[calc(100vw-2rem)] mx-4">
+                                                        <div className="space-y-2">
+                                                            <h4 className="font-bold">Description</h4>
+                                                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                                                {product.description}
+                                                            </p>
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
                         {/* Load More Button */}
@@ -191,7 +252,7 @@ export default function CollaboratorProducts() {
                                 </Button>
                             </div>
                         )}
-                    </div>
+                    </>
                 )}
             </div>
         </DashboardLayout>

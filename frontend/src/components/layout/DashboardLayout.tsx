@@ -3,6 +3,8 @@ import { AppSidebar } from './AppSidebar';
 import { Header } from './Header';
 import { Button } from '@/components/ui/button';
 import { Menu } from 'lucide-react';
+import { BottomNav } from './BottomNav';
+import { cn } from '@/lib/utils';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -27,10 +29,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden w-full">
         <Header />
-        <main className="flex-1 overflow-auto p-6">
+        <main className={cn(
+          "flex-1 overflow-auto p-4 md:p-6 transition-all duration-300",
+          "pb-20 md:pb-6" // Extra padding for BottomNav on mobile
+        )}>
           {children}
         </main>
       </div>
+      <BottomNav />
     </div>
   );
 }
