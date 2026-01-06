@@ -1,4 +1,5 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { AppSidebar } from './AppSidebar';
 import { Header } from './Header';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,14 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    setIsTransitioning(true);
+    const timer = setTimeout(() => setIsTransitioning(false), 300);
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen flex w-full bg-background">
@@ -22,7 +31,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         variant="ghost"
         size="icon"
         onClick={() => setSidebarOpen(true)}
-        className="fixed top-4 left-4 z-30 md:hidden"
+        className="absolute top-3.5 left-4 z-30 md:hidden"
       >
         <Menu className="w-6 h-6" />
       </Button>
@@ -31,7 +40,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <Header />
         <main className={cn(
           "flex-1 overflow-auto p-4 md:p-6 transition-all duration-300",
-          "pb-20 md:pb-6" // Extra padding for BottomNav on mobile
+          "pb-20 md:pb-6", // Extra padding for BottomNav on mobile
+          isTransitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
         )}>
           {children}
         </main>

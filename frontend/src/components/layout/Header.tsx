@@ -30,11 +30,10 @@ export function Header() {
   return (
     <header className="h-16 bg-card border-b border-border px-4 md:px-6 flex items-center justify-between md:justify-end sticky top-0 z-10 w-full">
       {/* Brand logo for mobile (hidden on desktop where sidebar is visible) */}
-      <div className="flex items-center gap-2 md:hidden">
-        <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shadow-sm">
-          <Smartphone className="w-4 h-4 text-primary-foreground" />
+      <div className="flex items-center gap-2 md:hidden ml-12">
+        <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-sm border border-border/50">
+          <img src="/favicon.ico" alt="Logo" className="w-full h-full object-contain" />
         </div>
-        <span className="font-bold text-sm text-primary tracking-tight">EasyManaging</span>
       </div>
 
       {/* Right side */}
