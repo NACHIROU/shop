@@ -360,6 +360,7 @@ export default function Tasks() {
                             <div className="p-2">
                               <Input
                                 placeholder="Rechercher par nom ou IMEI..."
+                                onKeyDown={(e) => e.stopPropagation()}
                                 onChange={(e) => {
                                   const search = e.target.value.toLowerCase();
                                   const items = document.querySelectorAll('[data-product-item]');
@@ -406,6 +407,7 @@ export default function Tasks() {
                                 <div className="p-2">
                                   <Input
                                     placeholder="Rechercher par nom ou IMEI..."
+                                    onKeyDown={(e) => e.stopPropagation()}
                                     onChange={(e) => {
                                       const search = e.target.value.toLowerCase();
                                       const items = document.querySelectorAll('[data-outgoing-product]');

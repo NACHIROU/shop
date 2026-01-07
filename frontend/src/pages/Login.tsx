@@ -18,10 +18,12 @@ export default function Login() {
     e.preventDefault();
     try {
       await login(loginData.email, loginData.password);
-      // Actual redirection is often handled by AuthContext state change or useEffect here
       toast.success('Connexion réussie');
-    } catch (error) {
-      toast.error('Erreur de connexion');
+    } catch (error: any) {
+      const errorMsg = error.message?.includes('401')
+        ? 'Identifiants invalides'
+        : (error.message || 'Erreur de connexion');
+      toast.error(errorMsg);
       console.error(error);
     }
   };
