@@ -565,3 +565,91 @@ class AnalyticsService:
             "total_profit": total_profit,
             "total_count": total_count
         }
+
+    @staticmethod
+    async def get_yearly_summary(admin_id: str) -> List[MonthlySummary]:
+        from app.schemas.analytics import MonthlySummary
+        summaries = []
+        now = datetime.utcnow()
+        # Start of 12 months ago
+        # Go back ~360 days to be safe, then find the start of that month
+        start_date = (now - timedelta(days=335)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        # Aggregate Operations (Sales, Purchases, Profit)
+        ops_pipeline = [
+            {"$match": {"admin_id": admin_id, "operation_date": {"$gte": start_date}}},
+            {"$group": {
+                "_id": {
+                    "year": {"$year": "$operation_date"},
+                    "month": {"$month": "$operation_date"}
+                },
+                "sales": {"$sum": {"$cond": [{"$eq": ["$type", "sale"]}, "$amount", 0]}},
+                "purchases": {"$sum": {"$cond": [{"$eq": ["$type", "purchase"]}, "$amount", 0]}},
+                "profit": {"$sum": {"$cond": [{"$eq": ["$type", "sale"]}, "$profit", 0]}}
+            }}
+        ]
+        ops_results = await operations_collection.aggregate(ops_pipeline).to_list(length=13)
+        ops_map = {f"{r['_id']['year']}-{r['_id']['month']}": r for r in ops_results}
+
+        # Aggregate Expenses
+        expenses_pipeline = [
+            {"$match": {"admin_id": admin_id, "date": {"$gte": start_date}}},
+            {"$group": {
+                "_id": {
+                    "year": {"$year": "$date"},
+                    "month": {"$month": "$date"}
+                },
+                "total": {"$sum": "$amount"}
+            }}
+        ]
+        expenses_results = await expenses_collection.aggregate(expenses_pipeline).to_list(length=13)
+        expenses_map = {f"{r['_id']['year']}-{r['_id']['month']}": r["total"] for r in expenses_results}
+
+        # Aggregate Completed Tasks
+        tasks_pipeline = [
+            {"$match": {"admin_id": admin_id, "status": "completed", "updated_at": {"$gte": start_date}}},
+            {"$group": {
+                "_id": {
+                    "year": {"$year": "$updated_at"},
+                    "month": {"$month": "$updated_at"}
+                },
+                "count": {"$sum": 1}
+            }}
+        ]
+        tasks_results = await tasks_collection.aggregate(tasks_pipeline).to_list(length=13)
+        tasks_map = {f"{r['_id']['year']}-{r['_id']['month']}": r["count"] for r in tasks_results}
+
+        month_names_fr = [
+            "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+            "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+        ]
+
+        for i in range(11, -1, -1):
+            # Logic to get year and month correctly
+            current_month = now.month - i
+            current_year = now.year
+            while current_month <= 0:
+                current_month += 12
+                current_year -= 1
+            
+            key = f"{current_year}-{current_month}"
+            op_data = ops_map.get(key, {})
+            
+            sales = op_data.get("sales", 0)
+            purchases = op_data.get("purchases", 0)
+            expenses = expenses_map.get(key, 0)
+            profit = op_data.get("profit", 0)
+            
+            summaries.append(MonthlySummary(
+                month_name=f"{month_names_fr[current_month-1]} {current_year}",
+                month_key=key,
+                sales=sales,
+                purchases=purchases,
+                expenses=expenses,
+                profit=profit,
+                net_profit=profit - expenses,
+                tasks_completed=tasks_map.get(key, 0),
+                global_balance=sales - purchases - expenses
+            ))
+        
+        return summaries

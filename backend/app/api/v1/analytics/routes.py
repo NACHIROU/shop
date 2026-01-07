@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query, Body
-from app.schemas.analytics import DailyOverview, MonthlyStats, DailyStats, GlobalStats, CategoryStatsResponse
+from app.schemas.analytics import DailyOverview, MonthlyStats, DailyStats, GlobalStats, CategoryStatsResponse, YearlySummaryResponse
 from app.services.analytics_service import AnalyticsService
 from app.services.email_service import EmailService
 from app.core.dependencies import get_current_admin_or_collaborator, get_current_superadmin
@@ -26,6 +26,12 @@ async def get_monthly_stats(current_user: User = Depends(get_current_admin_or_co
 async def get_weekly_stats(current_user: User = Depends(get_current_admin_or_collaborator)):
     admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
     return await AnalyticsService.get_weekly_stats(admin_id)
+
+@router.get("/yearly-summary", response_model=YearlySummaryResponse)
+async def get_yearly_summary(current_user: User = Depends(get_current_admin_or_collaborator)):
+    admin_id = str(current_user.id) if current_user.role == "admin" else current_user.admin_id
+    summaries = await AnalyticsService.get_yearly_summary(admin_id)
+    return YearlySummaryResponse(summaries=summaries)
 
 @router.get("/report")
 async def get_treasury_report(

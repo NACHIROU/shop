@@ -88,3 +88,25 @@ class CategoryStatsResponse(BaseModel):
     total_sales: float
     total_profit: float
     total_count: int
+
+class MonthlySummary(BaseModel):
+    month_name: str
+    month_key: str  # YYYY-MM
+    sales: float
+    purchases: float
+    expenses: float
+    profit: float # Operational profit
+    net_profit: float
+    tasks_completed: int
+    global_balance: float
+
+    class Config:
+        populate_by_name = True
+        alias_generator = lambda s: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(s.split('_')))
+
+class YearlySummaryResponse(BaseModel):
+    summaries: List[MonthlySummary]
+
+    class Config:
+        populate_by_name = True
+        alias_generator = lambda s: ''.join(word.capitalize() if i > 0 else word for i, word in enumerate(s.split('_')))

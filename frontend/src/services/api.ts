@@ -16,6 +16,7 @@ import type {
   DailyOverview,
   PaginatedResponse,
   InviteLink,
+  YearlySummaryResponse,
 } from '@/types';
 
 // Base API URL - proxied to backend
@@ -254,6 +255,8 @@ export const statsApi = {
     apiFetch<any[]>('/analytics/weekly'),
   getWeeklyStats: () =>
     apiFetch<any[]>('/analytics/weekly'),
+  getYearlySummary: () =>
+    apiFetch<YearlySummaryResponse>('/analytics/yearly-summary'),
   getGlobalStats: () =>
     apiFetch<any>('/analytics/global'),
   getReport: (startDate: string, endDate: string): Promise<any> =>

@@ -154,3 +154,19 @@ export interface InviteLink {
   invite_url: string;
   collaborator_id: string;
 }
+
+export interface MonthlySummary {
+  monthName: string;
+  monthKey: string;
+  sales: number;
+  purchases: number;
+  expenses: number;
+  profit: number;
+  netProfit: number;
+  tasksCompleted: number;
+  globalBalance: number;
+}
+
+export interface YearlySummaryResponse {
+  summaries: MonthlySummary[];
+}

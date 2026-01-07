@@ -23,10 +23,65 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="ShopManager" />
-  <link rel="apple-touch-icon" href="/favicon.ico" />
+
+  <style>
+    #splash-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.5s ease-out, visibility 0.5s;
+    }
+
+    .loader {
+      width: 48px;
+      height: 48px;
+      border: 5px solid #0284c7;
+      border-bottom-color: transparent;
+      border-radius: 50%;
+      display: inline-block;
+      box-sizing: border-box;
+      animation: rotation 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    .app-name {
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: #0284c7;
+      letter-spacing: -0.025em;
+    }
+
+    @keyframes rotation {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .splash-fade-out {
+      opacity: 0;
+      visibility: hidden;
+    }
+  </style>
 </head>
 
 <body>
+  <div id="splash-screen">
+    <div class="loader"></div>
+    <div class="app-name">EasyManaging</div>
+  </div>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
   <script>
