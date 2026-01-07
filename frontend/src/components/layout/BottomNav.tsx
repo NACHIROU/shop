@@ -17,8 +17,8 @@ export function BottomNav() {
     const adminNavItems = [
         { title: 'Dashboard', url: '/', icon: LayoutDashboard },
         { title: 'Produits', url: '/products', icon: Package },
+        { title: 'Rapports', url: '/reports', icon: ScrollText },
         { title: 'Tâches', url: '/tasks', icon: ClipboardList },
-        { title: 'Dépenses', url: '/expenses', icon: Receipt },
         { title: 'Équipe', url: '/collaborators', icon: Users },
     ];
 

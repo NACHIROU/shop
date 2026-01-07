@@ -10,6 +10,8 @@ import { Calendar, Download, Mail, Filter, TrendingUp, TrendingDown, Wallet, Loa
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { usePrivacy } from '@/contexts/PrivacyContext';
+import { MonthlySummary } from '@/types';
+import { cn } from '@/lib/utils';
 
 const Reports = () => {
     const [startDate, setStartDate] = useState(
@@ -23,6 +25,13 @@ const Reports = () => {
         queryKey: ['treasury-report', startDate, endDate],
         queryFn: () => statsApi.getReport(startDate, endDate),
     });
+
+    const { data: yearlyData } = useQuery({
+        queryKey: ['yearly-summary'],
+        queryFn: () => statsApi.getYearlySummary(),
+    });
+
+    const yearlySummary = yearlyData?.summaries || [];
 
     const handleEmailReport = async () => {
         if (!window.confirm("Voulez-vous vraiment envoyer ce rapport par email ?")) return;
@@ -213,6 +222,62 @@ const Reports = () => {
                             </Card>
                         </div>
 
+
+                        {/* Yearly History Section */}
+                        <Card className="border-border/50">
+                            <CardHeader className="flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-lg">Historique (12 derniers mois)</CardTitle>
+                                    <CardDescription>Performance mensuelle cumulée</CardDescription>
+                                </div>
+                                <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full uppercase font-bold tracking-wider">Cumulé</span>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="overflow-x-auto -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted-foreground/20">
+                                    <div className="min-w-[800px]">
+                                        <table className="w-full text-sm text-left">
+                                            <thead>
+                                                <tr className="border-b border-border text-muted-foreground">
+                                                    <th className="pb-3 font-medium">Mois</th>
+                                                    <th className="pb-3 font-medium text-right">Ventes</th>
+                                                    <th className="pb-3 font-medium text-right">Achats</th>
+                                                    <th className="pb-3 font-medium text-right">Dépenses</th>
+                                                    <th className="pb-3 font-medium text-right">Marge Opér.</th>
+                                                    <th className="pb-3 font-medium text-right">Bénéfice Net</th>
+                                                    <th className="pb-3 font-medium text-right">Solde</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-border">
+                                                {yearlySummary.slice().reverse().map((m: MonthlySummary) => (
+                                                    <tr key={m.monthKey} className="hover:bg-muted/30 transition-colors">
+                                                        <td className="py-3 font-medium whitespace-nowrap">{m.monthName}</td>
+                                                        <td className="py-3 text-right font-mono">{formatCurrency(m.sales)}</td>
+                                                        <td className="py-3 text-right font-mono text-muted-foreground">{isPrivate ? "••••" : formatCurrency(m.purchases)}</td>
+                                                        <td className="py-3 text-right font-mono text-destructive/80">{formatCurrency(m.expenses)}</td>
+                                                        <td className="py-3 text-right font-mono text-success/80">{isPrivate ? "••••" : formatCurrency(m.profit)}</td>
+                                                        <td className="py-3 text-right font-mono font-bold text-success">{isPrivate ? "••••" : formatCurrency(m.netProfit)}</td>
+                                                        <td className={cn(
+                                                            "py-3 text-right font-mono font-bold",
+                                                            m.globalBalance >= 0 ? "text-blue-500" : "text-destructive"
+                                                        )}>
+                                                            {isPrivate ? "••••" : formatCurrency(m.globalBalance)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                {yearlySummary.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                                                            Aucune donnée historique disponible
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         {/* Sales List Table */}
                         <Card className="border-border/50">
                             <CardHeader>
@@ -268,7 +333,7 @@ const Reports = () => {
                     </div>
                 )}
             </div>
-        </DashboardLayout>
+        </DashboardLayout >
     );
 };
 

@@ -6,7 +6,7 @@ import { ProfitChart } from '@/components/dashboard/ProfitChart';
 import { formatCurrency } from '@/services/api';
 import { TrendingUp, Package, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { api } from '@/services/api';
-import type { DailyOverview, MonthlyStats, MonthlySummary } from '@/types';
+import type { DailyOverview, MonthlyStats } from '@/types';
 import { cn } from '@/lib/utils';
 import { usePrivacy } from '@/contexts/PrivacyContext';
 
@@ -35,7 +35,6 @@ export default function AdminDashboard() {
     cancelledTasks: 0,
     totalValue: 0,
   });
-  const [yearlySummary, setYearlySummary] = useState<MonthlySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const { isPrivate } = usePrivacy();
 
@@ -44,19 +43,15 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [daily, monthly, productsData, yearly] = await Promise.all([
+        const [daily, monthly, productsData] = await Promise.all([
           api.stats.getDaily(),
           api.stats.getMonthly(),
           api.products.getAll(1, 100), // Get first 100 products for quick stats
-          api.stats.getYearlySummary(),
         ]);
         setDailyStats(daily || {});
         setMonthlyStats(monthly || {});
         if (productsData && Array.isArray(productsData.items)) {
           setProducts(productsData.items);
-        }
-        if (yearly && Array.isArray(yearly.summaries)) {
-          setYearlySummary(yearly.summaries);
         }
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -151,57 +146,6 @@ export default function AdminDashboard() {
                     <p className="text-2xl font-bold">{monthlyStats?.cancelledTasks || 0}</p>
                   </div>
                   <p className="text-xs text-muted-foreground">Annulées</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Yearly History Section */}
-            <div className="bg-card p-6 rounded-xl border border-border shadow-sm animate-fade-in">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold">Historique (12 derniers mois)</h3>
-                <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full uppercase font-bold tracking-wider">Cumulé Mensuel</span>
-              </div>
-
-              <div className="overflow-x-auto -mx-6 px-6 scrollbar-thin scrollbar-thumb-muted-foreground/20">
-                <div className="min-w-[800px]">
-                  <table className="w-full text-sm text-left">
-                    <thead>
-                      <tr className="border-b border-border text-muted-foreground">
-                        <th className="pb-3 font-medium">Mois</th>
-                        <th className="pb-3 font-medium text-right">Ventes</th>
-                        <th className="pb-3 font-medium text-right">Achats</th>
-                        <th className="pb-3 font-medium text-right">Dépenses</th>
-                        <th className="pb-3 font-medium text-right">Marge Opér.</th>
-                        <th className="pb-3 font-medium text-right">Bénéfice Net</th>
-                        <th className="pb-3 font-medium text-right">Solde</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {yearlySummary.slice().reverse().map((m) => (
-                        <tr key={m.monthKey} className="hover:bg-muted/30 transition-colors">
-                          <td className="py-3 font-medium whitespace-nowrap">{m.monthName}</td>
-                          <td className="py-3 text-right font-mono">{formatCurrency(m.sales)}</td>
-                          <td className="py-3 text-right font-mono text-muted-foreground">{isPrivate ? "••••" : formatCurrency(m.purchases)}</td>
-                          <td className="py-3 text-right font-mono text-destructive/80">{formatCurrency(m.expenses)}</td>
-                          <td className="py-3 text-right font-mono text-success/80">{isPrivate ? "••••" : formatCurrency(m.profit)}</td>
-                          <td className="py-3 text-right font-mono font-bold text-success">{isPrivate ? "••••" : formatCurrency(m.netProfit)}</td>
-                          <td className={cn(
-                            "py-3 text-right font-mono font-bold",
-                            m.globalBalance >= 0 ? "text-blue-500" : "text-destructive"
-                          )}>
-                            {isPrivate ? "••••" : formatCurrency(m.globalBalance)}
-                          </td>
-                        </tr>
-                      ))}
-                      {yearlySummary.length === 0 && (
-                        <tr>
-                          <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                            Aucune donnée historique disponible
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
                 </div>
               </div>
             </div>
