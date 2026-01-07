@@ -1,4 +1,4 @@
-from app.schemas.analytics import DailyStats, MonthlyStats, DailyOverview
+from app.schemas.analytics import DailyStats, MonthlyStats, DailyOverview, MonthlySummary
 from datetime import datetime, timedelta
 from typing import List
 from bson import ObjectId
@@ -568,7 +568,6 @@ class AnalyticsService:
 
     @staticmethod
     async def get_yearly_summary(admin_id: str) -> List[MonthlySummary]:
-        from app.schemas.analytics import MonthlySummary
         summaries = []
         now = datetime.utcnow()
         # Start of 12 months ago
