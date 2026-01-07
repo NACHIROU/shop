@@ -38,6 +38,7 @@ import {
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { BarcodeScanner } from '@/components/common/BarcodeScanner';
 import {
   Plus,
   Search,
@@ -394,6 +395,7 @@ export default function Products() {
   const ProductForm = ({ product, onSubmit, isSubmitting }: { product?: Product; onSubmit: (e: React.FormEvent<HTMLFormElement>) => void, isSubmitting: boolean }) => {
     const [formName, setFormName] = useState(product?.name || '');
     const [formCategory, setFormCategory] = useState(product?.category || (categories[0]?.name || "Autres"));
+    const [formImei, setFormImei] = useState(product?.imei || '');
 
     // Smarter auto-category selection
     const handleNameChange = (value: string) => {
@@ -452,7 +454,17 @@ export default function Products() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="imei">IMEI</Label>
-            <Input id="imei" name="imei" defaultValue={product?.imei} placeholder="123456789012345" required />
+            <div className="flex gap-2">
+              <Input
+                id="imei"
+                name="imei"
+                value={formImei}
+                onChange={(e) => setFormImei(e.target.value)}
+                placeholder="123456789012345"
+                required
+              />
+              <BarcodeScanner onScan={(val) => setFormImei(val)} label="Scanner l'IMEI" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">

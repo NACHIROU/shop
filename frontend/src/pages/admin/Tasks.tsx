@@ -58,6 +58,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ConfirmationModal } from '@/components/common/ConfirmationModal';
 import { useConfirmation } from '@/hooks/useConfirmation';
+import { BarcodeScanner } from '@/components/common/BarcodeScanner';
 
 const typeIcons = {
   vente: Package,
@@ -87,6 +88,7 @@ export default function Tasks() {
   const [isArchived, setIsArchived] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const { confirm, isOpen: isConfirmOpen, options: confirmOptions, close: closeConfirm, handleConfirm } = useConfirmation();
+  const [incomingImei, setIncomingImei] = useState('');
 
   // Fetch tasks
   const { data: taskList = [], isLoading: tasksLoading } = useQuery({
@@ -442,7 +444,17 @@ export default function Tasks() {
                           </div>
                           <div className="grid gap-2">
                             <Label htmlFor="incomingImei">IMEI</Label>
-                            <Input id="incomingImei" name="incomingImei" placeholder="987654321098765" required />
+                            <div className="flex gap-2">
+                              <Input
+                                id="incomingImei"
+                                name="incomingImei"
+                                value={incomingImei}
+                                onChange={(e) => setIncomingImei(e.target.value)}
+                                placeholder="987654321098765"
+                                required
+                              />
+                              <BarcodeScanner onScan={(val) => setIncomingImei(val)} label="Scanner l'IMEI Entrant" />
+                            </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
