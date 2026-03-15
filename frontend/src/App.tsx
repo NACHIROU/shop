@@ -11,6 +11,7 @@ import { PrivacyProvider } from "@/contexts/PrivacyContext";
 import Login from "./pages/Login";
 import ActivateAccount from "./pages/ActivateAccount";
 import Profile from "./pages/Profile";
+import Landing from "./pages/Landing";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -48,7 +49,10 @@ function AppRoutes() {
       <Route path="/activate" element={<ActivateAccount />} />
 
       {!user ? (
-        <Route path="*" element={<Navigate to="/login" />} />
+        <>
+          <Route path="/" element={<Landing />} />
+          <Route path="*" element={<Navigate to="/login" />} />
+        </>
       ) : (
         <>
           {/* SuperAdmin Routes */}
