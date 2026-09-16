@@ -189,6 +189,14 @@ export default function Landing() {
               </div>
             ))}
           </div>
+
+          <div className="mt-16 relative rounded-2xl overflow-hidden shadow-xl border border-stone-200">
+            <img 
+              src="/merchant_hero.jpg" 
+              alt="Gérant utilisant l'application" 
+              className="w-full h-auto object-cover max-h-[500px]" 
+            />
+          </div>
         </div>
       </section>
 
