@@ -123,6 +123,7 @@ export default function Landing() {
       <nav className="sticky top-0 z-50 bg-[#f5f5f0]/90 backdrop-blur-md border-b border-stone-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-20">
           <div className="flex items-center gap-3">
+            <img src="/logo.jpg" alt="EM Logo" className="h-10 w-auto rounded-md shadow-sm mix-blend-multiply" />
             <span className="text-xl font-bold tracking-tight text-stone-800 uppercase">
               EasyManaging
             </span>
@@ -264,9 +265,12 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto">
           <div className="grid md:grid-cols-3 gap-12 pb-16 border-b border-stone-800">
             <div>
-              <span className="text-xl font-bold text-stone-100 uppercase tracking-widest block mb-6">
-                EasyManaging
-              </span>
+              <div className="flex items-center gap-3 mb-6">
+                <img src="/logo.jpg" alt="EM Logo" className="h-10 w-auto rounded-md mix-blend-screen opacity-90" />
+                <span className="text-xl font-bold text-stone-100 uppercase tracking-widest block">
+                  EasyManaging
+                </span>
+              </div>
               <p className="text-sm leading-relaxed mb-8 max-w-sm">
                 La plateforme SaaS de gestion commerciale sobre et efficace pensée pour les marchands modernes.
               </p>
