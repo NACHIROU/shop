@@ -152,20 +152,24 @@ export default function Landing() {
       </nav>
 
       {/* ── HERO ─────────────────────────────── */}
-      <section className="relative py-32 px-4 sm:px-6 lg:px-8 bg-[#f5f5f0] border-b border-stone-200">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-stone-900 mb-8 leading-tight">
+      <section 
+        className="relative py-32 px-4 sm:px-6 lg:px-8 border-b border-stone-200 bg-cover bg-center"
+        style={{ backgroundImage: 'url("/merchant_hero.jpg")' }}
+      >
+        <div className="absolute inset-0 bg-stone-900/70 backdrop-blur-sm" />
+        <div className="relative z-10 max-w-4xl mx-auto text-center">
+          <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-stone-50 mb-8 leading-tight">
             Gérez votre boutique intelligemment
           </h1>
 
-          <p className="text-lg md:text-xl text-stone-600 mb-12 leading-relaxed max-w-2xl mx-auto font-light">
+          <p className="text-lg md:text-xl text-stone-200 mb-12 leading-relaxed max-w-2xl mx-auto font-light">
             Centralisez les stocks, les équipes, les tâches et les finances dans une interface épurée conçue pour les commerçants exigeants.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
             <button
               onClick={() => navigate('/login')}
-              className="group flex items-center justify-center gap-3 px-8 py-4 bg-stone-800 text-stone-100 font-semibold text-lg hover:bg-stone-900 transition-colors uppercase tracking-widest"
+              className="group flex items-center justify-center gap-3 px-8 py-4 bg-stone-100 text-stone-900 font-semibold text-lg hover:bg-white transition-colors uppercase tracking-widest"
             >
               Accéder maintenant
               <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -174,28 +178,20 @@ export default function Landing() {
               href={WHATSAPP_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-3 px-8 py-4 border border-stone-300 text-stone-800 font-semibold text-lg hover:bg-stone-200 transition-colors uppercase tracking-widest"
+              className="flex items-center justify-center gap-3 px-8 py-4 border border-stone-400 text-stone-100 font-semibold text-lg hover:bg-stone-800 transition-colors uppercase tracking-widest"
             >
               <MessageCircle className="h-5 w-5" />
               WhatsApp
             </a>
           </div>
 
-          <div className="mt-16 flex flex-wrap justify-center gap-8 border-t border-stone-200 pt-8">
+          <div className="mt-16 flex flex-wrap justify-center gap-8 border-t border-stone-500/50 pt-8">
             {['Zéro configuration', 'Multi-rôles', 'Sécurisé & audité'].map((tag) => (
-              <div key={tag} className="flex items-center gap-2 text-sm text-stone-600 font-medium uppercase tracking-widest">
+              <div key={tag} className="flex items-center gap-2 text-sm text-stone-300 font-medium uppercase tracking-widest">
                 <CheckCircle className="h-4 w-4" />
                 {tag}
               </div>
             ))}
-          </div>
-
-          <div className="mt-16 relative rounded-2xl overflow-hidden shadow-xl border border-stone-200">
-            <img 
-              src="/merchant_hero.jpg" 
-              alt="Gérant utilisant l'application" 
-              className="w-full h-auto object-cover max-h-[500px]" 
-            />
           </div>
         </div>
       </section>
