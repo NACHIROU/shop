@@ -122,12 +122,12 @@ export default function Landing() {
       {/* ── NAV ──────────────────────────────── */}
       <nav className="sticky top-0 z-50 bg-[#f5f5f0]/90 backdrop-blur-md border-b border-stone-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-20">
-          <div className="flex items-center gap-3">
+          <button onClick={scrollToTop} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <img src="/logo.jpg" alt="EM Logo" className="h-10 w-auto rounded-md shadow-sm mix-blend-multiply" />
             <span className="text-xl font-bold tracking-tight text-stone-800 uppercase">
               EasyManaging
             </span>
-          </div>
+          </button>
           <div className="hidden md:flex items-center gap-10 text-sm font-medium text-stone-600 uppercase tracking-widest">
             <a href="#features" className="hover:text-stone-900 transition-colors">Fonctionnalités</a>
             <a href="#how" className="hover:text-stone-900 transition-colors">Démarche</a>
@@ -265,12 +265,12 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto">
           <div className="grid md:grid-cols-3 gap-12 pb-16 border-b border-stone-800">
             <div>
-              <div className="flex items-center gap-3 mb-6">
+              <button onClick={scrollToTop} className="flex items-center gap-3 mb-6 hover:opacity-80 transition-opacity text-left">
                 <img src="/logo.jpg" alt="EM Logo" className="h-10 w-auto rounded-md mix-blend-screen opacity-90" />
                 <span className="text-xl font-bold text-stone-100 uppercase tracking-widest block">
                   EasyManaging
                 </span>
-              </div>
+              </button>
               <p className="text-sm leading-relaxed mb-8 max-w-sm">
                 La plateforme SaaS de gestion commerciale sobre et efficace pensée pour les marchands modernes.
               </p>
